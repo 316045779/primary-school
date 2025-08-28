@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英语课本点读应用</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: #f5f6fa;
+            font-family: "微软雅黑", "Arial", sans-serif;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 30px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+            padding: 24px 32px 16px 32px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 18px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 2.2em;
+            color: #2d3a4b;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 1.1em;
+            margin-top: 6px;
+        }
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 32px;
+        }
+        .book-section {
+            flex: 2 1 480px;
+            min-width: 320px;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            background: #eaeaea;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+        }
+        #bookCanvas {
+            width: 100%;
+            display: block;
+            background: #eaeaea;
+        }
+        .highlight-area {
+            position: absolute;
+            border: 2px solid #27ae60;
+            background: rgba(39, 174, 96, 0.18);
+            pointer-events: none;
+            display: none;
+            border-radius: 4px;
+            z-index: 2;
+        }
+        /* 顶部翻译条 */
+        .translation-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            z-index: 1000;
+            background: rgba(39, 174, 96, 0.95);
+            color: #fff;
+            font-size: 1.15em;
+            text-align: center;
+            padding: 10px 0 8px 0;
+            font-weight: bold;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: background 0.2s;
+            min-height: 36px;
+        }
+        .translation-bar .en {
+            display: block;
+            font-size: 1.05em;
+            font-weight: normal;
+            color: #e0f7e9;
+            margin-top: 2px;
+        }
+        .info-section {
+            display: none;
+        }
+        .page-controls, .audio-controls, .controls, .status {
+            display: none !important;
+        }
+        footer {
+            text-align: center;
+            color: #aaa;
+            font-size: 0.98em;
+            margin-top: 30px;
+        }
+        @media (max-width: 900px) {
+            .main-content {
+                flex-direction: column;
+                gap: 18px;
+            }
+            .book-section, .info-section {
+                min-width: 0;
+            }
+            .translation-bar {
+                font-size: 1em;
+                padding: 8px 0 6px 0;
+            }
+        }
+        body {
+            padding-top: 54px; /* 留出顶部翻译条空间 */
+        }
+    </style>
+</head>
+<body>
+    <div class="translation-bar" id="translationBar">
+        <span id="translationText">第一单元 早上好</span>
+        <span class="en" id="originalText">Unit 1 Good morning</span>
+    </div>
+    <div class="container">
+        <header>
+            <h1>英语课本点读应用</h1>
+            <div class="subtitle">点击课本上的区域即可播放对应的英语音频</div>
+        </header>
+        <div class="main-content">
+            <div class="book-section">
+                <div class="canvas-container" id="canvasContainer">
+                    <canvas id="bookCanvas" width="600" height="800"></canvas>
+                    <div id="highlightArea" class="highlight-area"></div>
+                </div>
+            </div>
+            <!-- info-section已隐藏 -->
+        </div>
+        <footer>
+            <p>英语点读应用 &copy; 2023 - 让英语学习更轻松</p>
+        </footer>
+    </div>
+    <script>
+        // 示例数据 - 在实际应用中，这些数据可能来自API或数据库
+        const textbookData = [
+            {
+                originImgUrl: "https://raw.githubusercontent.com/316045779/primary-school/main/SecondGrade/d3de2328-10e6-cdf9-3b81-8999be58d792.jpg",
+                areas: [
+                    {
+                        coordinate_x: 0.1754,
+                        coordinate_y: 0.0755,
+                        coordinate_width: 0.3922,
+                        coordinate_height: 0.0612,
+                        originSoundUrl: "https://raw.githubusercontent.com/316045779/primary-school/main/SecondGrade/606f0250-2465-9f3b-4c81-c8ad57614286.mp3",
+                        original: "Unit 1 Good morning",
+                        translation: "第一单元 早上好",
+                        duration: 3
+                    }
+                ],
+                pageNumber: 2
+            },
+            {
+                originImgUrl: "https://via.placeholder.com/800/6e8efb/ffffff?text=Page+3",
+                areas: [
+                    {
+                        coordinate_x: 0.3,
+                        coordinate_y: 0.2,
+                        coordinate_width: 0.4,
+                        coordinate_height: 0.1,
+                        originSoundUrl: "https://audio-ssl.itunes.apple.com/itunes-assets/Music6/v4/9d/39/95/9d3995c9-0a08-5c09-8b69-2c19d6863c0d/mzaf_46718371588101180.aac",
+                        original: "Hello, how are you?",
+                        translation: "你好吗？",
+                        duration: 2
+                    },
+                    {
+                        coordinate_x: 0.5,
+                        coordinate_y: 0.5,
+                        coordinate_width: 0.3,
+                        coordinate_height: 0.08,
+                        originSoundUrl: "https://audio-ssl.itunes.apple.com/itunes-assets/Music6/v4/9d/39/95/9d3995c9-0a08-5c09-8b69-2c19d6863c0d/mzaf_46718371588101180.aac",
+                        original: "I'm fine, thank you.",
+                        translation: "我很好，谢谢你。",
+                        duration: 2
+                    }
+                ],
+                pageNumber: 3
+            }
+        ];
+
+        // 应用状态
+        let currentPage = 0;
+        let currentAudio = null;
+        let canvas, ctx;
+        let img = null;
+        let highlightArea;
+
+        // 触摸滑动相关
+        let touchStartX = 0;
+        let touchEndX = 0;
+        const SWIPE_THRESHOLD = 60; // px
+
+        function init() {
+            canvas = document.getElementById('bookCanvas');
+            ctx = canvas.getContext('2d');
+            highlightArea = document.getElementById('highlightArea');
+
+            // 加载第一页
+            loadPage(currentPage);
+
+            // 事件监听
+            canvas.addEventListener('click', handleCanvasClick);
+
+            // 触摸滑动监听
+            const canvasContainer = document.getElementById('canvasContainer');
+            canvasContainer.addEventListener('touchstart', handleTouchStart, {passive: true});
+            canvasContainer.addEventListener('touchmove', handleTouchMove, {passive: true});
+            canvasContainer.addEventListener('touchend', handleTouchEnd, {passive: true});
+
+            // 鼠标左右滑动支持（桌面端）
+            let mouseDown = false, mouseStartX = 0;
+            canvasContainer.addEventListener('mousedown', e => {
+                mouseDown = true;
+                mouseStartX = e.clientX;
+            });
+            canvasContainer.addEventListener('mousemove', e => {
+                if (!mouseDown) return;
+                // 不做实时反馈
+            });
+            canvasContainer.addEventListener('mouseup', e => {
+                if (!mouseDown) return;
+                mouseDown = false;
+                const deltaX = e.clientX - mouseStartX;
+                if (deltaX > SWIPE_THRESHOLD) {
+                    goToPrevPage();
+                } else if (deltaX < -SWIPE_THRESHOLD) {
+                    goToNextPage();
+                }
+            });
+
+            // 调整Canvas大小
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+        }
+
+        function handleTouchStart(e) {
+            if (e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX;
+            }
+        }
+        function handleTouchMove(e) {
+            if (e.touches.length === 1) {
+                touchEndX = e.touches[0].clientX;
+            }
+        }
+        function handleTouchEnd(e) {
+            const deltaX = touchEndX - touchStartX;
+            if (deltaX > SWIPE_THRESHOLD) {
+                goToPrevPage();
+            } else if (deltaX < -SWIPE_THRESHOLD) {
+                goToNextPage();
+            }
+            touchStartX = 0;
+            touchEndX = 0;
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth || 600;
+            if (img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+                const aspectRatio = img.naturalHeight / img.naturalWidth;
+                canvas.height = Math.round(canvas.width * aspectRatio);
+            } else {
+                canvas.height = 800;
+            }
+            if (img && img.complete && img.naturalWidth > 0) {
+                drawPage();
+            }
+        }
+
+        function loadPage(pageIndex) {
+            if (pageIndex < 0 || pageIndex >= textbookData.length) return;
+            currentPage = pageIndex;
+            const page = textbookData[pageIndex];
+
+            // 更新顶部翻译条
+            updateTranslationBar(page.areas[0].translation, page.areas[0].original);
+
+            // 重新创建Image对象
+            img = new window.Image();
+            img.onload = function() {
+                resizeCanvas();
+                drawPage();
+            };
+            img.onerror = function() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#ccc";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#e74c3c";
+                ctx.font = "24px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("图片加载失败", canvas.width/2, canvas.height/2);
+            };
+            img.src = page.originImgUrl;
+
+            // 重置高亮区域
+            if (highlightArea) highlightArea.style.display = 'none';
+
+            // 停止当前音频
+            stopAudio();
+        }
+
+        function updateTranslationBar(translation, original) {
+            document.getElementById('translationText').textContent = translation || '';
+            document.getElementById('originalText').textContent = original || '';
+        }
+
+        function drawPage() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!img || !img.complete || img.naturalWidth === 0) {
+                ctx.fillStyle = "#ccc";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#e74c3c";
+                ctx.font = "24px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("图片未加载", canvas.width/2, canvas.height/2);
+                return;
+            }
+            const aspectRatio = img.naturalHeight / img.naturalWidth;
+            const drawHeight = canvas.width * aspectRatio;
+            canvas.height = drawHeight;
+            ctx.drawImage(img, 0, 0, canvas.width, drawHeight);
+
+            // 可选：绘制可点击区域（调试用）
+            // const page = textbookData[currentPage];
+            // page.areas.forEach(area => {
+            //     ctx.strokeStyle = 'rgba(46, 204, 113, 0.7)';
+            //     ctx.lineWidth = 2;
+            //     ctx.strokeRect(
+            //         area.coordinate_x * canvas.width,
+            //         area.coordinate_y * drawHeight,
+            //         area.coordinate_width * canvas.width,
+            //         area.coordinate_height * drawHeight
+            //     );
+            // });
+        }
+
+        function handleCanvasClick(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const page = textbookData[currentPage];
+            if (!img || !img.complete || img.naturalWidth === 0) return;
+            const aspectRatio = img.naturalHeight / img.naturalWidth;
+            const drawHeight = canvas.width * aspectRatio;
+
+            for (const area of page.areas) {
+                const areaX = area.coordinate_x * canvas.width;
+                const areaY = area.coordinate_y * drawHeight;
+                const areaWidth = area.coordinate_width * canvas.width;
+                const areaHeight = area.coordinate_height * drawHeight;
+
+                if (x >= areaX && x <= areaX + areaWidth &&
+                    y >= areaY && y <= areaY + areaHeight) {
+
+                    // 显示高亮区域
+                    if (highlightArea) {
+                        highlightArea.style.display = 'block';
+                        highlightArea.style.left = `${areaX}px`;
+                        highlightArea.style.top = `${areaY}px`;
+                        highlightArea.style.width = `${areaWidth}px`;
+                        highlightArea.style.height = `${areaHeight}px`;
+                    }
+
+                    // 播放音频
+                    playAudio(area.originSoundUrl);
+
+                    // 更新顶部翻译条
+                    updateTranslationBar(area.translation, area.original);
+
+                    return;
+                }
+            }
+        }
+
+        function playAudio(url) {
+            stopAudio();
+            currentAudio = new Audio(url);
+            currentAudio.play();
+            // 不需要播放/停止按钮，自动播放
+            // 可选：播放结束后隐藏高亮
+            currentAudio.onended = function() {
+                if (highlightArea) highlightArea.style.display = 'none';
+            };
+            currentAudio.onerror = function() {
+                if (highlightArea) highlightArea.style.display = 'none';
+            };
+        }
+
+        function stopAudio() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            if (highlightArea) highlightArea.style.display = 'none';
+        }
+
+        function goToPrevPage() {
+            if (currentPage > 0) {
+                loadPage(currentPage - 1);
+            }
+        }
+
+        function goToNextPage() {
+            if (currentPage < textbookData.length - 1) {
+                loadPage(currentPage + 1);
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
