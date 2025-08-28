@@ -67,6 +67,10 @@
             border-radius: 4px;
             z-index: 2;
         }
+        .highlight-area.red {
+            border: 2px solid #e74c3c !important;
+            background: rgba(231, 76, 60, 0.18) !important;
+        }
         /* 顶部翻译条 */
         .translation-bar {
             position: fixed;
@@ -178,6 +182,146 @@
             z-index: 2000;
             transition: width 0.3s;
         }
+        /* 新增：右下角单元切换浮动按钮和弹窗样式 */
+        .unit-fab {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 1300;
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 56px;
+            height: 56px;
+            font-size: 2em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .unit-fab:active {
+            background: #219150;
+        }
+        .unit-popup {
+            position: fixed;
+            right: 32px;
+            bottom: 90px;
+            z-index: 1350;
+            background: rgba(255,255,255,0.98);
+            border-radius: 12px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.13);
+            min-width: 200px;
+            max-width: 90vw;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 18px 16px 14px 16px;
+            font-size: 1.08em;
+            display: none;
+            animation: fadeInUnitPopup 0.18s;
+        }
+        @keyframes fadeInUnitPopup {
+            from { opacity: 0; transform: translateY(30px);}
+            to { opacity: 1; transform: translateY(0);}
+        }
+        .unit-popup.open {
+            display: block;
+        }
+        .unit-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.13em;
+            color: #27ae60;
+            text-align: left;
+        }
+        .unit-popup .unit-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .unit-popup .unit-list li {
+            padding: 7px 8px;
+            margin-bottom: 4px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.15s;
+            color: #2d3a4b;
+        }
+        .unit-popup .unit-list li:hover {
+            background: #eafaf1;
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .unit-popup .unit-list li.active {
+            background: #eafaf1;
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .unit-popup .unit-list li.loading {
+            background: #f6f6f6;
+            color: #aaa;
+            font-weight: normal;
+            cursor: wait;
+            position: relative;
+        }
+        .unit-popup .unit-list li.loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #27ae60;
+            border-top: 2px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg);}
+            100% { transform: rotate(360deg);}
+        }
+        /* 主体页面加载中遮罩 */
+        .main-loading-mask {
+            position: fixed;
+            left: 0; top: 0; right: 0; bottom: 0;
+            z-index: 3000;
+            background: rgba(255,255,255,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25em;
+            color: #27ae60;
+            pointer-events: all;
+            transition: opacity 0.2s;
+        }
+        .main-loading-mask .spinner {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            border: 4px solid #27ae60;
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-right: 16px;
+            vertical-align: middle;
+        }
+        @media (max-width: 600px) {
+            .unit-fab {
+                right: 12px;
+                bottom: 12px;
+                width: 48px;
+                height: 48px;
+                font-size: 1.5em;
+            }
+            .unit-popup {
+                right: 8px;
+                bottom: 68px;
+                min-width: 120px;
+                padding: 12px 6px 10px 10px;
+                font-size: 1em;
+            }
+        }
     </style>
     <!-- SheetJS (XLSX) CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -198,6 +342,17 @@
         </select>
         <span>次</span>
         <button id="playAllToggleBtn" title="播放整页/暂停">▶️ 整页</button>
+    </div>
+    <!-- 新增：右下角单元切换浮动按钮和弹窗 -->
+    <button class="unit-fab" id="unitFabBtn" title="切换单元">📖</button>
+    <div class="unit-popup" id="unitPopup">
+        <h3>单元切换</h3>
+        <ul class="unit-list" id="unitList"></ul>
+    </div>
+    <!-- 主体页面加载中遮罩 -->
+    <div class="main-loading-mask" id="mainLoadingMask" style="display:none;">
+        <span class="spinner"></span>
+        <span id="mainLoadingText">加载中...</span>
     </div>
     <div class="container">
         <div class="main-content">
@@ -223,6 +378,10 @@
 
         let textbookData = [];
 
+        // 新增：单元信息
+        let unitListData = []; // [{unitName, pageIndex, fullName}]
+        let unitNameToPageIndex = {}; // {unitName: pageIndex}
+
         // 列名与字段的映射（根据实际xls表头修改）
         const FIELD_MAP = {
             originImgUrl: "originImgUrl",
@@ -247,6 +406,19 @@
 
         // 新增：每句播放次数，默认2
         let repeatCount = 2;
+
+        // 主体加载遮罩控制
+        function showMainLoading(text) {
+            const mask = document.getElementById('mainLoadingMask');
+            if (mask) {
+                mask.style.display = 'flex';
+                document.getElementById('mainLoadingText').textContent = text || '加载中...';
+            }
+        }
+        function hideMainLoading() {
+            const mask = document.getElementById('mainLoadingMask');
+            if (mask) mask.style.display = 'none';
+        }
 
         // 预加载图片和音频（只预加载传入的pages）
         function preloadResources(pages, onProgress, onComplete) {
@@ -312,6 +484,7 @@
 
         // 通过给定的xls/xlsx文件URL下载并解析课本数据
         function fetchAndParseXLS(url) {
+            showMainLoading('课本数据加载中...');
             fetch(url)
                 .then(response => {
                     if (!response.ok) throw new Error('下载文件失败');
@@ -320,6 +493,7 @@
                 .then(arrayBuffer => {
                     if (typeof XLSX === "undefined") {
                         alert("XLSX库未加载，无法解析课本数据。");
+                        hideMainLoading();
                         return;
                     }
                     const data = new Uint8Array(arrayBuffer);
@@ -360,8 +534,15 @@
                     // 转为数组并排序
                     textbookData = Object.values(pageMap).sort((a, b) => a.pageNumber - b.pageNumber);
 
+                    // 新增：提取单元信息
+                    extractUnitsFromTextbookData();
+
+                    // 渲染单元弹窗
+                    renderUnitPopup();
+
                     // 预加载前5页资源并显示进度条
                     showPreloadProgressBar();
+                    showMainLoading('课本资源预加载中...');
                     const firstBatch = textbookData.slice(0, PRELOAD_BATCH_SIZE);
                     preloadResources(
                         firstBatch,
@@ -370,6 +551,7 @@
                         },
                         () => {
                             hidePreloadProgressBar();
+                            hideMainLoading();
                             // 标记已预加载
                             for (let i = 0; i < firstBatch.length; i++) {
                                 preloadPageSet.add(i);
@@ -380,17 +562,160 @@
                     );
                 })
                 .catch(err => {
+                    hideMainLoading();
                     alert('课本数据加载失败: ' + err.message);
                 });
         }
 
+        // 新增：提取单元信息
+        function extractUnitsFromTextbookData() {
+            unitListData = [];
+            unitNameToPageIndex = {};
+            // 遍历每一页，找出original字段包含Unit的内容
+            for (let i = 0; i < textbookData.length; i++) {
+                const page = textbookData[i];
+                if (page.areas && page.areas.length > 0) {
+                    for (let area of page.areas) {
+                        if (area.original && typeof area.original === "string" && /Unit\s*\d+/i.test(area.original)) {
+                            // 只保留第一个Unit出现的页面
+                            const match = area.original.match(/Unit\s*\d+[A-Za-z]?/i);
+                            if (match) {
+                                const unitName = match[0].replace(/\s+/g, " ").trim();
+                                if (!unitNameToPageIndex[unitName]) {
+                                    unitListData.push({
+                                        unitName,
+                                        pageIndex: i,
+                                        fullName: area.original // 保存全称
+                                    });
+                                    unitNameToPageIndex[unitName] = i;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // 如果最后一个unit是Unit 1并且是单词表，改名为Word list
+            if (unitListData.length > 0) {
+                let last = unitListData[unitListData.length - 1];
+                // 优化：如果最后一个单元名包含"Unit 1"（不区分大小写），直接改名为"Word list"
+                if (last.unitName && last.unitName.toLowerCase().includes("unit 1")) {
+                    last.unitName = "Word list";
+                    last.fullName = "Word list";
+                }
+            }
+        }
+
+        // 新增：渲染右下角单元弹窗
+        function renderUnitPopup() {
+            const unitList = document.getElementById('unitList');
+            unitList.innerHTML = '';
+            unitListData.forEach((unit, idx) => {
+                const li = document.createElement('li');
+                li.textContent = unit.fullName || unit.unitName;
+                li.dataset.pageIndex = unit.pageIndex;
+                li.dataset.unitIdx = idx;
+                li.onclick = function() {
+                    setUnitLoading(idx);
+                    loadPageWithLoading(unit.pageIndex, idx);
+                    closeUnitPopup();
+                };
+                unitList.appendChild(li);
+            });
+            updateUnitPopupActive();
+        }
+
+        // 新增：高亮当前单元（只高亮当前，其他不加active）
+        function updateUnitPopupActive() {
+            const unitList = document.getElementById('unitList');
+            if (!unitList) return;
+            Array.from(unitList.children).forEach((li, idx) => {
+                li.classList.remove('active');
+                // 只高亮当前单元
+                const pageIdx = parseInt(li.dataset.pageIndex, 10);
+                let nextUnitIdx = unitListData.findIndex(u => u.pageIndex > currentPage);
+                let thisUnitIdx = unitListData.findIndex(u => u.pageIndex == pageIdx);
+                if (thisUnitIdx === -1) return;
+                let isActive = false;
+                if (nextUnitIdx === -1) {
+                    // 最后一个单元
+                    if (currentPage >= pageIdx) isActive = true;
+                } else {
+                    if (currentPage >= pageIdx && currentPage < unitListData[nextUnitIdx].pageIndex) isActive = true;
+                }
+                if (isActive) {
+                    li.classList.add('active');
+                }
+            });
+        }
+
+        // 单元加载中样式
+        function setUnitLoading(idx) {
+            const unitList = document.getElementById('unitList');
+            Array.from(unitList.children).forEach((li, i) => {
+                li.classList.remove('loading');
+                li.style.pointerEvents = '';
+            });
+            if (typeof idx === 'number') {
+                const li = unitList.children[idx];
+                if (li) {
+                    li.classList.add('loading');
+                    li.style.pointerEvents = 'none';
+                }
+            }
+            // 主体页面显示加载中
+            showMainLoading('单元切换中...');
+        }
+        function clearUnitLoading() {
+            const unitList = document.getElementById('unitList');
+            Array.from(unitList.children).forEach((li) => {
+                li.classList.remove('loading');
+                li.style.pointerEvents = '';
+            });
+            hideMainLoading();
+        }
+
+        // 包装loadPage，切换单元时加loading
+        function loadPageWithLoading(pageIndex, unitIdx) {
+            setUnitLoading(unitIdx);
+            ensurePreloadForPage(pageIndex, function() {
+                loadPage(pageIndex);
+                setTimeout(clearUnitLoading, 300); // 稍微延迟去除loading，防止闪烁
+            });
+        }
+
+        // 新增：右下角弹窗开关
+        function openUnitPopup() {
+            document.getElementById('unitPopup').classList.add('open');
+        }
+        function closeUnitPopup() {
+            document.getElementById('unitPopup').classList.remove('open');
+        }
+        function toggleUnitPopup() {
+            document.getElementById('unitPopup').classList.toggle('open');
+        }
+
         // 页面加载后，自动拉取指定URL的xls/xlsx文件
         document.addEventListener("DOMContentLoaded", function() {
-            // 你可以在这里修改xls/xlsx文件的URL
-            const XLS_URL = BASE_RES_URL + "/diandu.xlsx"; // TODO: 替换为实际的xls/xlsx文件地址
-
-            // 自动加载课本数据
+            const XLS_URL = BASE_RES_URL + "/diandu.xlsx";
             fetchAndParseXLS(XLS_URL);
+
+            // 右下角浮动按钮事件
+            document.getElementById('unitFabBtn').onclick = function(e) {
+                e.stopPropagation();
+                toggleUnitPopup();
+            };
+            // 点击弹窗外部关闭
+            document.addEventListener('click', function(e) {
+                const popup = document.getElementById('unitPopup');
+                const fabBtn = document.getElementById('unitFabBtn');
+                if (!popup.contains(e.target) && e.target !== fabBtn) {
+                    closeUnitPopup();
+                }
+            });
+            // 防止弹窗内点击冒泡关闭
+            document.getElementById('unitPopup').addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
         });
 
         // 预加载进度条相关
@@ -433,8 +758,8 @@
         // 新增：整页播放时每句的当前播放次数
         let playAllRepeatCurrent = 0;
 
-        // 去除音量控制
-        // let currentVolume = 1;
+        // 新增：当前正在播放的区域（用于红色高亮）
+        let currentPlayingArea = null;
 
         // 触摸滑动相关
         let touchStartX = 0;
@@ -453,6 +778,34 @@
                 btn.textContent = '▶️ 整页';
                 btn.title = '播放整页';
             }
+        }
+
+        function setHighlightArea(area, color) {
+            if (!highlightArea || !area) return;
+            const aspectRatio = img && img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1.33;
+            const drawHeight = canvas.width * aspectRatio;
+            const areaX = area.coordinate_x * canvas.width;
+            const areaY = area.coordinate_y * drawHeight;
+            const areaWidth = area.coordinate_width * canvas.width;
+            const areaHeight = area.coordinate_height * drawHeight;
+            highlightArea.style.display = 'block';
+            highlightArea.style.left = `${areaX}px`;
+            highlightArea.style.top = `${areaY}px`;
+            highlightArea.style.width = `${areaWidth}px`;
+            highlightArea.style.height = `${areaHeight}px`;
+            if (color === 'red') {
+                highlightArea.classList.add('red');
+            } else {
+                highlightArea.classList.remove('red');
+            }
+        }
+
+        function hideHighlightArea() {
+            if (highlightArea) {
+                highlightArea.style.display = 'none';
+                highlightArea.classList.remove('red');
+            }
+            currentPlayingArea = null;
         }
 
         function init() {
@@ -518,7 +871,7 @@
                     // 记录当前播放的index
                     playAllPausedIndex = playAllIndex;
                     if (currentAudio) currentAudio.pause();
-                    if (highlightArea) highlightArea.style.display = 'none';
+                    hideHighlightArea();
                     if (playAllTimeout) {
                         clearTimeout(playAllTimeout);
                         playAllTimeout = null;
@@ -602,6 +955,7 @@
                 return;
             }
             showPreloadProgressBar();
+            showMainLoading('课本资源预加载中...');
             const batchPages = textbookData.slice(batchStart, batchEnd);
             preloadResources(
                 batchPages,
@@ -610,6 +964,7 @@
                 },
                 () => {
                     hidePreloadProgressBar();
+                    hideMainLoading();
                     for (let i = batchStart; i < batchEnd; i++) {
                         preloadPageSet.add(i);
                     }
@@ -620,7 +975,6 @@
 
         function loadPage(pageIndex) {
             if (pageIndex < 0 || pageIndex >= textbookData.length) return;
-            // 分批预加载
             ensurePreloadForPage(pageIndex, function() {
                 currentPage = pageIndex;
                 const page = textbookData[pageIndex];
@@ -638,7 +992,6 @@
                     resizeCanvas();
                     drawPage();
                 } else {
-                    // 重新创建Image对象
                     img = new window.Image();
                     img.onload = function() {
                         imageCache[page.originImgUrl] = img;
@@ -659,28 +1012,26 @@
                     img.src = page.originImgUrl;
                 }
 
-                // 重置高亮区域
-                if (highlightArea) highlightArea.style.display = 'none';
-
-                // 停止当前音频
+                hideHighlightArea();
                 stopAudio();
 
-                // 停止整页播放
                 playAllMode = false;
                 playAllIndex = 0;
-                playAllPausedIndex = null; // 切换页面时也要重置暂停index
+                playAllPausedIndex = null;
                 playAllRepeatCurrent = 0;
                 if (playAllTimeout) {
                     clearTimeout(playAllTimeout);
                     playAllTimeout = null;
                 }
                 updatePlayAllToggleBtn();
+
+                // 新增：高亮当前单元
+                updateUnitPopupActive();
             });
         }
 
         function updateTranslationBar(translation, original) {
             document.getElementById('translationText').textContent = translation || '';
-            // document.getElementById('originalText').textContent = original || '';
         }
 
         function drawPage() {
@@ -704,23 +1055,29 @@
             const page = textbookData[currentPage];
             if (page && page.areas) {
                 page.areas.forEach(area => {
-                    ctx.strokeStyle = 'rgba(46, 204, 113, 0.7)';
-                    ctx.lineWidth = 2;
+                    ctx.save();
+                    // 如果是当前正在播放的区域，画红色
+                    if (currentPlayingArea && area === currentPlayingArea) {
+                        ctx.strokeStyle = '#e74c3c';
+                        ctx.lineWidth = 2.5;
+                    } else {
+                        ctx.strokeStyle = 'rgba(46, 204, 113, 0.7)';
+                        ctx.lineWidth = 2;
+                    }
                     ctx.strokeRect(
                         area.coordinate_x * canvas.width,
                         area.coordinate_y * drawHeight,
                         area.coordinate_width * canvas.width,
                         area.coordinate_height * drawHeight
                     );
+                    ctx.restore();
                 });
             }
         }
 
-        // 修正：canvas点击事件，确保点击区域能正确播放音频
         function handleCanvasClick(e) {
             if (playAllMode) return;
             if (!canvas) return;
-            // 兼容触摸事件
             let x, y;
             if (e.touches && e.touches.length > 0) {
                 const rect = canvas.getBoundingClientRect();
@@ -748,23 +1105,18 @@
                 if (x >= areaX && x <= areaX + areaWidth &&
                     y >= areaY && y <= areaY + areaHeight) {
 
-                    if (highlightArea) {
-                        highlightArea.style.display = 'block';
-                        highlightArea.style.left = `${areaX}px`;
-                        highlightArea.style.top = `${areaY}px`;
-                        highlightArea.style.width = `${areaWidth}px`;
-                        highlightArea.style.height = `${areaHeight}px`;
-                    }
+                    setHighlightArea(area, 'red');
+                    currentPlayingArea = area;
+                    drawPage();
 
-                    // 修正：确保originSoundUrl存在且有效才播放
                     if (area.originSoundUrl && area.originSoundUrl.trim() !== "" && area.originSoundUrl.toLowerCase() !== "undefined") {
-                        // 新增：点击区域时也按repeatCount播放
                         playAudioRepeat(area.originSoundUrl, repeatCount, function() {
-                            if (highlightArea) highlightArea.style.display = 'none';
-                        });
+                            hideHighlightArea();
+                            drawPage();
+                        }, area);
                     } else {
-                        // 没有音频时也要隐藏高亮
-                        if (highlightArea) highlightArea.style.display = 'none';
+                        hideHighlightArea();
+                        drawPage();
                     }
 
                     updateTranslationBar(area.translation, area.original);
@@ -773,14 +1125,14 @@
                     break;
                 }
             }
-            // 如果没有点到任何区域，隐藏高亮
-            if (!found && highlightArea) {
-                highlightArea.style.display = 'none';
+            if (!found) {
+                hideHighlightArea();
+                drawPage();
             }
         }
 
-        // 新增：支持多次播放音频
-        function playAudioRepeat(url, times, onAllEnd) {
+        // 修改playAudioRepeat，支持高亮红色区域
+        function playAudioRepeat(url, times, onAllEnd, areaForHighlight) {
             stopAudio();
             if (!url || url.trim() === "" || url.toLowerCase() === "undefined") {
                 if (typeof onAllEnd === "function") onAllEnd();
@@ -793,11 +1145,17 @@
                 } else {
                     currentAudio = new Audio(url);
                 }
-                // currentAudio.volume = currentVolume;
+                // 高亮红色区域
+                if (areaForHighlight) {
+                    setHighlightArea(areaForHighlight, 'red');
+                    currentPlayingArea = areaForHighlight;
+                    drawPage();
+                }
                 const playPromise = currentAudio.play();
                 if (playPromise && typeof playPromise.then === "function") {
                     playPromise.catch(function(err){
-                        if (highlightArea) highlightArea.style.display = 'none';
+                        hideHighlightArea();
+                        drawPage();
                         if (typeof onAllEnd === "function") onAllEnd();
                     });
                 }
@@ -806,11 +1164,14 @@
                     if (count < times) {
                         playOnce();
                     } else {
+                        hideHighlightArea();
+                        drawPage();
                         if (typeof onAllEnd === "function") onAllEnd();
                     }
                 };
                 currentAudio.onerror = function() {
-                    if (highlightArea) highlightArea.style.display = 'none';
+                    hideHighlightArea();
+                    drawPage();
                     if (typeof onAllEnd === "function") onAllEnd();
                 };
             }
@@ -818,9 +1179,9 @@
         }
 
         function playAudio(url) {
-            // 兼容老代码，默认播放repeatCount次
             playAudioRepeat(url, repeatCount, function() {
-                if (highlightArea) highlightArea.style.display = 'none';
+                hideHighlightArea();
+                drawPage();
             });
         }
 
@@ -829,10 +1190,10 @@
                 currentAudio.pause();
                 currentAudio = null;
             }
-            if (highlightArea) highlightArea.style.display = 'none';
+            hideHighlightArea();
+            drawPage();
         }
 
-        // 整页播放
         function playAllAreas() {
             const page = textbookData[currentPage];
             if (!page.areas || page.areas.length === 0) {
@@ -846,25 +1207,16 @@
                 playAllIndex = 0;
                 playAllPausedIndex = null;
                 playAllRepeatCurrent = 0;
-                if (highlightArea) highlightArea.style.display = 'none';
+                hideHighlightArea();
+                drawPage();
                 updatePlayAllToggleBtn();
                 return;
             }
             const area = page.areas[playAllIndex];
 
-            const aspectRatio = img && img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1.33;
-            const drawHeight = canvas.width * aspectRatio;
-            const areaX = area.coordinate_x * canvas.width;
-            const areaY = area.coordinate_y * drawHeight;
-            const areaWidth = area.coordinate_width * canvas.width;
-            const areaHeight = area.coordinate_height * drawHeight;
-            if (highlightArea) {
-                highlightArea.style.display = 'block';
-                highlightArea.style.left = `${areaX}px`;
-                highlightArea.style.top = `${areaY}px`;
-                highlightArea.style.width = `${areaWidth}px`;
-                highlightArea.style.height = `${areaHeight}px`;
-            }
+            setHighlightArea(area, 'red');
+            currentPlayingArea = area;
+            drawPage();
 
             updateTranslationBar(area.translation, area.original);
 
@@ -878,17 +1230,16 @@
                 return;
             }
 
-            // 新增：整页播放时每句repeatCount次
             playAllRepeatCurrent = 0;
             function playCurrentAreaRepeat() {
                 if (!playAllMode) {
-                    if (highlightArea) highlightArea.style.display = 'none';
+                    hideHighlightArea();
+                    drawPage();
                     updatePlayAllToggleBtn();
                     playAllPausedIndex = playAllIndex;
                     return;
                 }
                 if (playAllRepeatCurrent < repeatCount) {
-                    // 播放一次
                     let audio;
                     if (audioCache[area.originSoundUrl]) {
                         audio = audioCache[area.originSoundUrl].cloneNode();
@@ -896,12 +1247,15 @@
                         audio = new Audio(area.originSoundUrl);
                     }
                     currentAudio = audio;
-                    // currentAudio.volume = currentVolume;
+                    setHighlightArea(area, 'red');
+                    currentPlayingArea = area;
+                    drawPage();
                     const playPromise = audio.play();
                     if (playPromise && typeof playPromise.then === "function") {
                         playPromise.catch(function(err){
-                            if (highlightArea) highlightArea.style.display = 'none';
-                            playAllRepeatCurrent = repeatCount; // 跳过剩余
+                            hideHighlightArea();
+                            drawPage();
+                            playAllRepeatCurrent = repeatCount;
                             playAllIndex++;
                             if (playAllMode) {
                                 playAllTimeout = setTimeout(() => {
@@ -917,8 +1271,9 @@
                         playCurrentAreaRepeat();
                     };
                     audio.onerror = function() {
-                        if (highlightArea) highlightArea.style.display = 'none';
-                        playAllRepeatCurrent = repeatCount; // 跳过剩余
+                        hideHighlightArea();
+                        drawPage();
+                        playAllRepeatCurrent = repeatCount;
                         playAllIndex++;
                         if (playAllMode) {
                             playAllTimeout = setTimeout(() => {
@@ -929,10 +1284,11 @@
                         }
                     };
                 } else {
-                    // 播放完本句，进入下一句
                     playAllIndex++;
-                    playAllPausedIndex = playAllIndex; // 每次播放完都更新暂停index
+                    playAllPausedIndex = playAllIndex;
                     playAllRepeatCurrent = 0;
+                    hideHighlightArea();
+                    drawPage();
                     playAllTimeout = setTimeout(() => {
                         playAllAreas();
                     }, 300);
@@ -953,7 +1309,6 @@
             }
         }
 
-        // 只在DOM完全加载后初始化
         window.addEventListener('DOMContentLoaded', function() {
             init();
         });
