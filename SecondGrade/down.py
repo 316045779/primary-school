@@ -53,21 +53,28 @@ def download_files_from_xls_by_colnames(
                 if resp.status_code == 200:
                     with open(save_path, "wb") as f:
                         f.write(resp.content)
-                    print(f"第{row_idx+1}行，已下载: {filename}")
+                    print(f"已下载: {filename}")
                 else:
                     print(f"下载失败: {filename}，状态码: {resp.status_code}")
             except Exception as e:
                 print(f"下载{url}出错: {e}")
 
+
+import xlrd
+
 # 示例用法
 if __name__ == "__main__":
     # 假设xls文件路径为"diandu/diandu.xlsx"
     # 假设需要下载的url列名集合为{"originImgUrl", "originSoundUrl"}
-    xls_path = "diandu/diandu.xlsx"
-    save_dir = "diandu/downloads"
+    xls_path = "diandu/SecondGrade/diandu.xlsx"
+    save_dir = "diandu/SecondGrade/downloads"
     filename_col_names = {"originImgUrl", "originSoundUrl"}  # 请根据实际表头修改
     start_row = 1  # 包含表头
-    end_row = 933   # 下载第1到第8行（含），即A1~A8
+    end_row = -1
+    if end_row == -1 :
+        workbook = xlrd.open_workbook(xls_path)
+        sheet = workbook.sheet_by_index(0)
+        end_row = sheet.nrows  # 自动读取xlsx总行数，end_row为最后一行索引
     download_files_from_xls_by_colnames(
         xls_path, 
         save_dir, 

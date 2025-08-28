@@ -67,7 +67,11 @@ if __name__ == "__main__":
     save_dir = "diandu/FifthGrade/downloads"
     filename_col_names = {"originImgUrl", "originSoundUrl"}  # 请根据实际表头修改
     start_row = 1  # 包含表头
-    end_row = 1127   # 下载第1到第8行（含），即A1~A8
+    end_row = -1
+    if end_row == -1 :
+        workbook = xlrd.open_workbook(xls_path)
+        sheet = workbook.sheet_by_index(0)
+        end_row = sheet.nrows  # 自动读取xlsx总行数，end_row为最后一行索引
     download_files_from_xls_by_colnames(
         xls_path, 
         save_dir, 
