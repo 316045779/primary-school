@@ -53,7 +53,7 @@ def download_files_from_xls_by_colnames(
                 if resp.status_code == 200:
                     with open(save_path, "wb") as f:
                         f.write(resp.content)
-                    print(f"已下载: {filename}")
+                    print(f"第{row_idx+1}行，已下载: {filename}")
                 else:
                     print(f"下载失败: {filename}，状态码: {resp.status_code}")
             except Exception as e:
