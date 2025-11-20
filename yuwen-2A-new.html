@@ -487,6 +487,29 @@ function getWordPinyin(word) {
     let lastRepeatCount = 1;
     let lastRate = 1;
 
+    // ===== 补充下面变量和辅助函数，实现顺序播放时每课首词前朗读课名 =====
+    let wordToLessonNameList = []; // 用于顺序播放时，每个词对应其课文名
+    let lessonNameArr = []; // 选中范围课文名列表
+    let wordsFlatArr = []; // 选中范围内的完整顺序词语数组
+    function buildWordToLessonMapForCurrentRange() {
+        // 用于顺序朗读时，为每个词记录课文名
+        wordToLessonNameList = [];
+        lessonNameArr = [];
+        wordsFlatArr = [];
+        const startIdx = Number(startLessonSel.value);
+        const endIdx = Number(endLessonSel.value);
+        for (let i = startIdx; i <= endIdx; i++) {
+            const lesson = LESSONS[i];
+            // 对当前课的每个词标记课名
+            for (let j = 0; j < lesson.words.length; j++) {
+                wordToLessonNameList.push(lesson.name);
+                wordsFlatArr.push(lesson.words[j]);
+            }
+            lessonNameArr.push(lesson.name);
+        }
+    }
+    // ===============================
+
     function updateShuffle() {
         shuffleCb.checked = shuffleRadio.checked;
     }
@@ -510,34 +533,37 @@ function getWordPinyin(word) {
     autoRadio.addEventListener('change', function(){
         updateAutoNext();
         if(playing && !paused) {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;  // 添加这一行
+            }
             if(autoNextCb.checked) {
-                if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
+                    if (speaking || paused || !playing) {  // 增加 !playing 检查
                         setTimeout(autoGo, 100);
                         return;
                     }
                     nextWord(true);
                 }, Number(intervalInput.value)*1000);
-            } else {
-                if (timer) clearTimeout(timer);
             }
         }
     });
+
     manualRadio.addEventListener('change', function(){
         updateAutoNext();
         if(playing && !paused) {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;  // 添加这一行
+            }
             if(autoNextCb.checked) {
-                if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
+                    if (speaking || paused || !playing) {  // 增加 !playing 检查
                         setTimeout(autoGo, 100);
                         return;
                     }
                     nextWord(true);
                 }, Number(intervalInput.value)*1000);
-            } else {
-                if (timer) clearTimeout(timer);
             }
         }
     });
@@ -546,9 +572,12 @@ function getWordPinyin(word) {
     intervalEarly.addEventListener('input', function() {
         intervalInput.value = intervalEarly.value;
         if(playing && !paused && autoNextCb.checked) {
-            if (timer) clearTimeout(timer);
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;  // 添加这一行
+            }
             timer = setTimeout(function autoGo(){
-                if (speaking || paused) {
+                if (speaking || paused || !playing) {  // 增加 !playing 检查
                     setTimeout(autoGo, 100);
                     return;
                 }
@@ -766,6 +795,9 @@ function getWordPinyin(word) {
         }
         statusDiv.textContent = `第 ${idx+1} / ${totalWords} 个  |  第 ${repeatN} / ${repeatMax} 次`;
     }
+
+
+    // ========== 重写 playCurrentWordWithRepeat 函数 ==========
     function playCurrentWordWithRepeat(cb) {
         if (!orderedList.length || paused) {
             if (cb) cb();
@@ -773,29 +805,63 @@ function getWordPinyin(word) {
         }
         let repeatMax = Number(repeatCountInput.value) || 1;
         currentRepeat = 1;
-        function playOneRepeat() {
-            if (paused) {
-                return;
+
+        // 新增变量：用于顺序朗读课名
+        let pendingLessonName = null;
+        let lessonNameToSpeak = null;
+
+        // 仅顺序播放（shuffle=false）生效：
+        if (!shuffleCb.checked) {
+            // 确保最新的映射
+            buildWordToLessonMapForCurrentRange();
+            // 找到orderedList[currentIndex]在wordsFlatArr中的index
+            let allIdx = wordsFlatArr.indexOf(orderedList[currentIndex]);
+            if (allIdx !== -1 && wordToLessonNameList.length === wordsFlatArr.length && wordToLessonNameList.length > 0) {
+                // 在当前顺序中，检测是否为每课第1个词
+                // 只有在第0个 或 前一个词课名不同，则要朗读新的课名
+                if (allIdx === 0 || wordToLessonNameList[allIdx] !== wordToLessonNameList[allIdx-1]) {
+                    // 朗读课名，完毕后朗读词语
+                    pendingLessonName = wordToLessonNameList[allIdx];
+                }
             }
+        }
+
+        function actuallySpeakWord() {
             showStatus(currentIndex, currentRepeat, orderedList.length, repeatMax);
-            // 确保rate只为整数1-3
             let intRate = parseInt(rateInput.value) || 1;
             if (intRate < 1) intRate = 1;
             if (intRate > 3) intRate = 3;
             speak(orderedList[currentIndex], { rate: intRate }, function() {
-                if (!playing) { if (cb) cb(); return; }
+                if (!playing) { 
+                    if (cb) cb(); 
+                    return; 
+                }
                 if (paused) return;
                 if (currentRepeat < repeatMax) {
                     currentRepeat++;
-                    setTimeout(playOneRepeat, 2000);
+                    setTimeout(actuallySpeakWord, 2000);
                 } else {
                     currentRepeat = 1;
                     if (cb) cb();
                 }
             });
         }
-        playOneRepeat();
+
+        if (pendingLessonName) {
+            // 用和词语朗读同样的语速
+            let intRate = parseInt(rateInput.value) || 1;
+            if (intRate < 1) intRate = 1;
+            if (intRate > 3) intRate = 3;
+            speak(pendingLessonName, { rate: intRate }, function() {
+                setTimeout(actuallySpeakWord, 200); // 课名+词之间稍做停顿
+            });
+        } else {
+            actuallySpeakWord();
+        }
     }
+    // ========== END playCurrentWordWithRepeat 重写 ==========
+
+
     function nextWord(auto=false) {
         if (!orderedList.length || paused) return;
         currentIndex += 1;
@@ -905,6 +971,11 @@ function getWordPinyin(word) {
         try{ speechSynthesis.cancel(); }catch(e){}
     }
     function startPlay() {
+        // 在函数开头添加定时器清理
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
         if (stopped) return;
         updateShuffle();
         updateAutoNext();
@@ -932,6 +1003,9 @@ function getWordPinyin(word) {
         lastRate = rateInput.value;
         lastOrderedList = orderedList.slice();
 
+        // 若顺序，更新映射
+        if (!shuffleCb.checked) buildWordToLessonMapForCurrentRange();
+
         startBtn.disabled = true;
         pauseContinueBtn.disabled = false;
         pauseContinueBtn.textContent = "暂停";
@@ -954,6 +1028,11 @@ function getWordPinyin(word) {
         });
     }
     function restartPlay() {
+        // 在函数开头添加定时器清理
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
         if (!lastWordsArr.length) {
             alert("没有可重新听写的词语（请先点击“开始”完整听写一轮）");
             return;
@@ -983,6 +1062,9 @@ function getWordPinyin(word) {
         lastRepeatCount = repeatCountInput.value;
         lastRate = rateInput.value;
         lastOrderedList = orderedList.slice();
+
+        // 若顺序，更新映射
+        if (!shuffleCb.checked) buildWordToLessonMapForCurrentRange();
 
         startBtn.disabled = true;
         pauseContinueBtn.disabled = false;
@@ -1029,7 +1111,8 @@ function getWordPinyin(word) {
 
     nextBtn.addEventListener('click', () => {
         if (!orderedList.length || paused) return;
-        if (timer) clearTimeout(timer);
+        if (timer) clearTimeout(timer);  // 清除现有定时器
+        timer = null;  // 添加这一行，确保定时器完全重置
         if (currentIndex < orderedList.length-1) {
             currentIndex++;
             currentRepeat = 1;
