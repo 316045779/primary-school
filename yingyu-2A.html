@@ -121,8 +121,10 @@
             letter-spacing: 2px;
             transition: opacity 0.3s;
             font-family: 'Microsoft YaHei', Arial, sans-serif;
-            white-space: normal; 
-            overflow-wrap: anywhere; 
+            /* 支持超出自动换行，统一缩进、视觉左齐 */
+            white-space: normal;  /* 关键：允许换行 */
+            overflow-wrap: anywhere; /* 关键：强制单词内换行以防溢出 */
+            /* 新增：当词太多时出现下拉条 */
             max-height: 208px;
             overflow-y: auto;
         }
@@ -156,17 +158,16 @@
             margin-right: 0;
             margin-bottom: 6px;
         }
-        .zi-text {
-            font-size: 1.08em;
-            margin-bottom: 3px;
-        }
         .pinyin-text {
             font-size: 0.92em;
             color: #8495bb;
             line-height: 1.32;
-            margin-bottom: 0;
+            margin-bottom: 2px;
             user-select: none;
             pointer-events: none;
+        }
+        .zi-text {
+            font-size: 1.08em;
         }
         @media (max-width: 500px) {
             .container {
@@ -221,6 +222,7 @@
             display: inline-block;
             box-shadow: 0 1px 3px #9fe5cb4d;
         }
+        /* 新增: 隐藏early-setting动态样式 */
         .early-setting.hide {
             display: none !important;
         }
@@ -229,6 +231,8 @@
 <body>
 <div class="container">
     <h2>听写播报</h2>
+
+    <!-- 优先设置区：乱序/顺序、自动/手动、间隔、次数、语速 -->
     <div class="early-settings-row">
         <div class="early-setting" style="width:100%;margin-bottom:6px;">
             <span>顺序：</span>
@@ -251,7 +255,7 @@
         <div class="early-setting" style="display:flex;gap:16px;width:100%;">
             <div id="intervalSetting" style="display:flex;align-items:center;">
                 <label for="intervalEarly" style="margin-bottom:0;">间隔(秒):</label>
-                <input type="number" id="intervalEarly" value="10" min="1" style="width:60px;margin-left:5px;" disabled>
+                <input type="number" id="intervalEarly" value="20" min="1" style="width:60px;margin-left:5px;" disabled>
             </div>
             <div style="display:flex;align-items:center;">
                 <label for="repeatCountEarly" style="margin-bottom:0;">每词读次数:</label>
@@ -259,18 +263,24 @@
             </div>
         </div>
         <div class="early-setting" style="width:100%;">
+            <!-- 语速(整数)：只允许整数1-3 -->
             <label for="rateEarly" style="margin-bottom:0;">语速(1-3):</label>
             <input type="number" id="rateEarly" value="1" min="1" max="3" step="1" style="width:60px;margin-left:5px;">
         </div>
     </div>
+
+    <!-- 课文范围选择器 -->
     <div class="range-row">
         <label for="startLesson">课文范围：</label>
         <select id="startLesson" class="range-select"></select>
         <span>—</span>
         <select id="endLesson" class="range-select"></select>
     </div>
+    <!-- 词语预览区，初始可见，听写时隐藏 -->
     <div id="wordsPreview"></div>
+    <!-- 词语编辑和展示已移除。仅保留textarea用于存储和自定义编辑（隐藏） -->
     <textarea id="words" style="display:none;"></textarea>
+    <!-- 保留原本的控制按钮，不再单独展示原复选框和参数输入 -->
     <div class="btn-row">
         <button id="startBtn">开始</button>
         <button id="prevBtn" disabled>上一个</button>
@@ -279,201 +289,158 @@
         <button id="resetBtn" style="display:none;">结束</button>
     </div>
     <div class="status-bar" id="status"></div>
+    <!-- 重新开始按钮始终展示，不要隐藏 -->
     <div class="relisten-row" id="relistenRow">
         <button id="restartBtn">重新开始</button>
     </div>
 </div>
 
 <script>
-// 将 LESSONS 提前到全局，供 getWordZhongwen 正常访问
+// 将 LESSONS 提前到全局，供 getWordPinyin 正常访问
 const LESSONS = [
     {
-        "name": "Unit 1",
-        "words": ["feel", "see", "smell", "hear", "taste"],
-        "zhongwen": ["感觉到", "看见", "闻到", "听见", "品尝（味道）"]
+        "name": "阅读1",
+        "words": ["妈妈", "身子", "他们", "看见", "我们", "哪里", "那边", "雪白", "过去", "孩子", "什么", "两条", "宽广", "长短", "成长"],
+        "pinyin": [["mā", "ma"], ["shēn", "zi"], ["tā", "men"], ["kàn", "jiàn"], ["wǒ", "men"], ["nǎ", "lǐ"], ["nà", "biān"], ["xuě", "bái"], ["guò", "qù"], ["hái", "zi"], ["shén", "me"], ["liǎng", "tiáo"], ["kuān", "guǎng"], ["cháng", "duǎn"], ["chéng", "zhǎng"]]
     },
     {
-        "name": "Unit 2",
-        "words": ["uncle", "aunt", "cousin", "old", "young", "cute"],
-        "zhongwen": ["舅父；叔父；伯父；姑父；姨父", "姑母；姨母；伯母；婶婶；舅母", "堂兄（或弟、姐、妹）；表兄（或弟、姐、妹）", "年纪大的", "年轻的", "可爱的"]
+        "name": "阅读2",
+        "words": ["太阳", "天空", "一起", "冬天", "花朵", "池子", "江河", "海洋", "许多", "田地", "工作", "办法", "你们", "上升", "连忙"],
+        "pinyin": [["tài", "yáng"], ["tiān", "kōng"], ["yì", "qǐ"], ["dōng", "tiān"], ["huā", "duǒ"], ["chí", "zi"], ["jiāng", "hé"], ["hǎi", "yáng"], ["xǔ", "duō"], ["tián", "dì"], ["gōng", "zuò"], ["bàn", "fǎ"], ["nǐ", "men"], ["shàng", "shēng"], ["lián", "máng"]]
     },
     {
-        "name": "Unit 3",
-        "words": ["doll", "toy plane", "toy bear", "ball", "robot", "jigsaw puzzle"],
-        "zhongwen": ["玩具娃娃", "玩具飞机", "玩具熊", "球", "机器人", "拼图游戏"]
+        "name": "阅读3",
+        "words": ["如果", "已经", "长大", "告别", "四海为家", "自己", "出发", "动物", "胆子", "肚子", "那里", "知识", "年轻", "更多"],
+        "pinyin": [["rú", "guǒ"], ["yǐ", "jīng"], ["zhǎng", "dà"], ["gào", "bié"], ["sì", "hǎi", "wéi", "jiā"], ["zì", "jǐ"], ["chū", "fā"], ["dòng", "wù"], ["dǎn", "zi"], ["dù", "zi"], ["nà", "lǐ"], ["zhī", "shi"], ["nián", "qīng"], ["gèng", "duō"]]
     },
     {
-        "name": "Unit 4",
-        "words": ["pet shop", "fruit shop", "cinema", "zoo", "park", "toy shop"],
-        "zhongwen": ["宠物店", "水果店", "电影院", "动物园", "公园", "玩具店"]
+        "name": "识字1",
+        "words": ["花园", "飞鸟", "红领巾", "欢笑", "到处", "方块", "群众", "座位", "队长"],
+        "pinyin": [["huā", "yuán"], ["fēi", "niǎo"], ["hóng", "lǐng", "jīn"], ["huān", "xiào"], ["dào", "chù"], ["fāng", "kuài"], ["qún", "zhòng"], ["zuò", "wèi"], ["duì", "zhǎng"]]
     },
     {
-        "name": "Unit 5",
-        "words": ["cow", "sheep", "duck", "chick", "chicken", "pig"],
-        "zhongwen": ["奶牛", "羊；绵羊", "鸭", "小鸡", "鸡", "猪"]
+        "name": "识字2",
+        "words": ["杨树", "树叶", "松柏", "化石", "开花", "之后", "金桂"],
+        "pinyin": [["yáng", "shù"], ["shù", "yè"], ["sōng", "bǎi"], ["huà", "shí"], ["kāi", "huā"], ["zhī", "hòu"], ["jīn", "guì"]]
     },
     {
-        "name": "Unit 6",
-        "words": ["play with lanterns", "eat mooncakes", "solve riddles", "look at the moon"],
-        "zhongwen": ["玩灯笼", "吃月饼", "猜谜语", "赏月"]
+        "name": "识字3",
+        "words": ["拍手", "世界", "云彩", "丛林", "竹林", "朋友", "保护", "休息"],
+        "pinyin": [["pāi", "shǒu"], ["shì", "jiè"], ["yún", "cǎi"], ["cóng", "lín"], ["zhú", "lín"], ["péng", "you"], ["bǎo", "hù"], ["xiū", "xi"]]
+    },
+    {
+        "name": "识字4",
+        "words": ["四季", "春风", "农事", "月光", "身体", "辛苦", "心里", "大家", "肥胖", "谷子", "虽说", "初中"],
+        "pinyin": [["sì", "jì"], ["chūn", "fēng"], ["nóng", "shì"], ["yuè", "guāng"], ["shēn", "tǐ"], ["xīn", "kǔ"], ["xīn", "lǐ"], ["dà", "jiā"], ["féi", "pàng"], ["gǔ", "zi"], ["suī", "shuō"], ["chū", "zhōng"]]
+    },
+    {
+        "name": "阅读4",
+        "words": ["天上", "美丽", "爸爸", "下来", "不用", "高兴", "哥哥", "秋千", "彩云", "提起", "好吗", "团圆", "挂住", "好啊"],
+        "pinyin": [["tiān", "shàng"], ["měi", "lì"], ["bà", "ba"], ["xià", "lái"], ["bú", "yòng"], ["gāo", "xìng"], ["gē", "ge"], ["qiū", "qiān"], ["cǎi", "yún"], ["tí", "qǐ"], ["hǎo", "ma"], ["tuán", "yuán"], ["guà", "zhù"], ["hǎo", "a"]]
+    },
+    {
+        "name": "阅读5",
+        "words": ["宝贝", "干活", "回来", "一些", "天气", "欢快", "它们", "告诉", "名字", "出门"],
+        "pinyin": [["bǎo", "bèi"], ["gàn", "huó"], ["huí", "lái"], ["yī", "xiē"], ["tiān", "qì"], ["huān", "kuài"], ["tā", "men"], ["gào", "su"], ["míng", "zi"], ["chū", "mén"]]
+    },
+    {
+        "name": "阅读6",
+        "words": ["星星", "晚上", "无数", "奶奶", "中间", "总是", "爷爷", "北边", "勺子", "转动", "这个", "后来"],
+        "pinyin": [["xīng", "xing"], ["wǎn", "shang"], ["wú", "shù"], ["nǎi", "nai"], ["zhōng", "jiān"], ["zǒng", "shì"], ["yé", "ye"], ["běi", "biān"], ["sháo", "zi"], ["zhuǎn", "dòng"], ["zhè", "ge"], ["hòu", "lái"]]
+    },
+    {
+	    "name": "阅读8",
+	    "words": ["那些", "山顶", "山头", "云海", "仙人", "前方", "仙女", "巨大", "座位", "闪亮", "小狗", "形状"],
+	    "pinyin": [["nà", "xiē"], ["shān", "dǐng"], ["shān", "tóu"], ["yún", "hǎi"], ["xiān", "rén"], ["qián", "fāng"], ["xiān", "nǚ"], ["jù", "dà"], ["zuò", "wèi"], ["shǎn", "liàng"], ["xiǎo", "gǒu"], ["xíng", "zhuàng"]]
+    },
+    {
+        "name": "阅读9",
+        "words": ["山区", "群山", "树木", "灯光", "中午", "眼前", "细雨", "风光", "中外", "湖水", "胜利", "海岛", "弯刀", "现在", "就是"],
+        "pinyin": [["shān", "qū"], ["qún", "shān"], ["shù", "mù"], ["dēng", "guāng"], ["zhōng", "wǔ"], ["yǎn", "qián"], ["xì", "yǔ"], ["fēng", "guāng"], ["zhōng", "wài"], ["hú", "shuǐ"], ["shèng", "lì"], ["hǎi", "dǎo"], ["wān", "dāo"], ["xiàn", "zài"], ["jiù", "shì"]]
+    },
+    {
+        "name": "阅读10",
+        "words": ["地方", "水果", "月份", "枝叶", "五光十色", "好客", "老乡", "有的", "城市", "空气", "水分", "这里", "味道", "有名", "毛孔", "钉子"],
+        "pinyin": [["dì", "fang"], ["shuǐ", "guǒ"], ["yuè", "fèn"], ["zhī", "yè"], ["wǔ", "guāng", "shí", "sè"], ["hào", "kè"], ["lǎo", "xiāng"], ["yǒu", "de"], ["chéng", "shì"], ["kōng", "qì"], ["shuǐ", "fèn"], ["zhè", "lǐ"], ["wèi", "dào"], ["yǒu", "míng"], ["máo", "kǒng"], ["dīng", "zi"]]
+    },
+    {
+        "name": "阅读11",
+        "words": ["坐井观天", "哪儿", "回答", "大话", "不过", "那么", "抬头"],
+        "pinyin": [["zuò", "jǐng", "guān", "tiān"], ["nǎ", "er"], ["huí", "dá"], ["dà", "huà"], ["bú", "guò"], ["nà", "me"], ["tái", "tóu"]]
+    },
+    {
+        "name": "阅读12",
+        "words": ["当作", "前面", "面对面", "出去", "过冬", "知道", "赶快", "正好", "明天", "清早", "好像", "一样", "天亮", "出来"],
+        "pinyin": [["dàng", "zuò"], ["qián", "miàn"], ["miàn", "duì", "miàn"], ["chū", "qù"], ["guò", "dōng"], ["zhī", "dào"], ["gǎn", "kuài"], ["zhèng", "hǎo"], ["míng", "tiān"], ["qīng", "zǎo"], ["hǎo", "xiàng"], ["yī", "yàng"], ["tiān", "liàng"], ["chū", "lái"]]
+    },
+    {
+        "name": "阅读13",
+        "words": ["从前", "以后", "多么", "那个", "叶子", "虫子", "自言自语", "邻居", "奇怪"],
+        "pinyin": [["cóng", "qián"], ["yǐ", "hòu"], ["duō", "me"], ["nà", "ge"], ["yè", "zi"], ["chóng", "zi"], ["zì", "yán", "zì", "yǔ"], ["lín", "jū"], ["qí", "guài"]]
+    },
+    {
+        "name": "阅读14",
+        "words": ["年代", "更加", "明亮", "星星之火", "中国", "胜利", "道路"],
+        "pinyin": [["nián", "dài"], ["gèng", "jiā"], ["míng", "liàng"], ["xīng", "xing", "zhī", "huǒ"], ["zhōng", "guó"], ["shèng", "lì"], ["dào", "lù"]]
+    },
+    {
+        "name": "阅读15",
+        "words": ["同志", "红军", "敌人", "生产", "常常", "来回", "非常", "战士", "一块儿", "白天"],
+        "pinyin": [["tóng", "zhì"], ["hóng", "jūn"], ["dí", "rén"], ["shēng", "chǎn"], ["cháng", "cháng"], ["lái", "huí"], ["fēi", "cháng"], ["zhàn", "shì"], ["yī", "kuài", "er"], ["bái", "tiān"]]
+    },
+    {
+        "name": "阅读16",
+        "words": ["难忘", "火红", "人民", "因为", "总理", "人们", "四面八方", "为了", "人群", "欢乐", "开心"],
+        "pinyin": [["nán", "wàng"], ["huǒ", "hóng"], ["rén", "mín"], ["yīn", "wèi"], ["zǒng", "lǐ"], ["rén", "men"], ["sì", "miàn", "bā", "fāng"], ["wèi", "le"], ["rén", "qún"], ["huān", "lè"], ["kāi", "xīn"]]
+    },
+    {
+        "name": "阅读17",
+        "words": ["由于", "年轻", "共产党员", "共产党", "现在", "一点儿", "消息"],
+        "pinyin": [["yóu", "yú"], ["nián", "qīng"], ["gòng", "chǎn", "dǎng", "yuán"], ["gòng", "chǎn", "dǎng"], ["xiàn", "zài"], ["yī", "diǎn", "er"], ["xiāo", "xi"]]
+    },
+    {
+        "name": "阅读19",
+        "words": ["于是", "无论", "船只", "同时", "行人", "一切", "上空", "看来", "不久", "路上", "出现", "散步", "消失"],
+        "pinyin": [["yú", "shì"], ["wú", "lùn"], ["chuán", "zhī"], ["tóng", "shí"], ["xíng", "rén"], ["yī", "qiè"], ["shàng", "kōng"], ["kàn", "lái"], ["bù", "jiǔ"], ["lù", "shang"], ["chū", "xiàn"], ["sàn", "bù"], ["xiāo", "shī"]]
+    },
+    {
+        "name": "阅读20",
+        "words": ["空地", "伙伴", "唱歌", "回家", "一会儿", "着火", "火星", "一边", "连忙", "树林", "水汽", "白云"],
+        "pinyin": [["kòng", "dì"], ["huǒ", "bàn"], ["chàng", "gē"], ["huí", "jiā"], ["yī", "huì", "er"], ["zháo", "huǒ"], ["huǒ", "xīng"], ["yī", "biān"], ["lián", "máng"], ["shù", "lín"], ["shuǐ", "qì"], ["bái", "yún"]]
+    },
+    {
+        "name": "阅读21",
+        "words": ["果子", "木工", "身边", "仔细", "能干", "椅子", "怎么", "自信", "从来", "这么"],
+        "pinyin": [["guǒ", "zi"], ["mù", "gōng"], ["shēn", "biān"], ["zǐ", "xì"], ["néng", "gàn"], ["yǐ", "zi"], ["zěn", "me"], ["zì", "xìn"], ["cóng", "lái"], ["zhè", "me"]]
+    },
+    {
+        "name": "阅读22",
+        "words": ["上面", "快乐", "可是", "难过", "但是", "和好"],
+        "pinyin": [["shàng", "miàn"], ["kuài", "lè"], ["kě", "shì"], ["nán", "guò"], ["dàn", "shì"], ["hé", "hǎo"]]
+    },
+    {
+        "name": "阅读23",
+        "words": ["眼泪", "水花", "青草", "游戏", "只有", "可爱", "可以", "多少", "咱们", "田野", "大地", "远方"],
+        "pinyin": [["yǎn", "lèi"], ["shuǐ", "huā"], ["qīng", "cǎo"], ["yóu", "xì"], ["zhǐ", "yǒu"], ["kě", "ài"], ["kě", "yǐ"], ["duō", "shǎo"], ["zán", "men"], ["tián", "yě"], ["dà", "dì"], ["yuǎn", "fāng"]]
     }
 ];
-// 从数据列表获取中文释义
-function getWordZhongwen(word) {
+// 从数据列表获取拼音
+function getWordPinyin(word) {
+    // 遍历所有课文找到对应的词语
     for (let lesson of LESSONS) {
         for (let i = 0; i < lesson.words.length; i++) {
-            if (lesson.words[i] === word && lesson.zhongwen && lesson.zhongwen[i]) {
-                return lesson.zhongwen[i];
+            if (lesson.words[i] === word && lesson.pinyin && lesson.pinyin[i]) {
+                return lesson.pinyin[i];
             }
         }
     }
-    return "";
+    // 如果找不到拼音，返回空数组
+    return [];
 }
-
-// ========== 英语朗读支持方案 begin ==========
-
-// 检测用户希望的语言包的可用性
-function getBestEnglishVoice() {
-    let voices = window.speechSynthesis.getVoices();
-    let preferred = [
-        // Google Chrome 优质美音
-        "Google 英语(美国)", // Android Firefox/Wework
-        "Google US English",
-        "Google 英语（美国）",
-        // 微软Edge默认的
-        "Microsoft Aria Online (Natural) - 英语(美国)",
-        "Microsoft Jenny Online (Natural) - 英语(美国)",
-        "Microsoft Guy Online (Natural) - 英语(美国)",
-        "Microsoft Zira Desktop - English (United States)",
-        "Microsoft David Desktop - English (United States)",
-        // 其它优质英音
-        "Google UK English Female",
-        "Google UK English Male",
-        // macOS
-        "Samantha",
-        "Daniel",
-        // 其它英文
-        "en-US", "en-GB"
-    ];
-    for (let label of preferred) {
-        let match = voices.find(v => v.name === label);
-        if (match) return match;
-    }
-    for (let lang of ["en-US", "en-GB"]) {
-        let match = voices.find(v => v.lang === lang);
-        if (match) return match;
-    }
-    let enVoices = voices.filter(v => v.lang && v.lang.startsWith("en"));
-    if (enVoices.length) return enVoices[0];
-    if (voices.length) return voices[0];
-    return null;
-}
-
-// 自动判断当前单词是英语还是中文
-function isEnglishWord(text) {
-    return /^[a-zA-Z\s'\-.,;:()?!]+$/.test(text.trim());
-}
-
-// 朗读函数增强：英语用优质voice
-function enhancedSpeak(text, opts, onend) {
-    if (!('speechSynthesis' in window)) {
-        alert("该浏览器不支持语音朗读(speechSynthesis)！");
-        if (onend) onend();
-        return;
-    }
-    if (speechSynthesis.speaking) {
-        try { speechSynthesis.cancel(); } catch(e) {}
-    }
-
-    let msg = new window.SpeechSynthesisUtterance(text.trim());
-    let rateVal = 1;
-    if (typeof opts?.rate === 'string' || typeof opts?.rate === 'number') {
-        rateVal = Number(opts.rate);
-    }
-    if (rateVal < 1) rateVal = 1;
-    if (rateVal > 3) rateVal = 3;
-    let realRate = 1;
-    if (rateVal === 1) realRate = 0.4;
-    else if (rateVal === 2) realRate = 1;
-    else if (rateVal === 3) realRate = 1.4;
-    msg.rate = realRate;
-
-    let voices = window.speechSynthesis.getVoices?.() || [];
-
-    if (isEnglishWord(text)) {
-        let enVoice = getBestEnglishVoice();
-        if (enVoice) {
-            msg.voice = enVoice;
-            msg.lang = enVoice.lang;
-        } else {
-            msg.lang = 'en-US';
-        }
-    } else {
-        let zhVoice = voices.find(v=>v.lang && v.lang.toLowerCase().includes('zh'));
-        if (zhVoice) {
-            msg.voice = zhVoice;
-            msg.lang = zhVoice.lang;
-        } else {
-            msg.lang = 'zh-CN';
-        }
-    }
-    speaking = true;
-    msg.onend = function() {
-        speaking = false;
-        if (onend) onend();
-    };
-    msg.onerror = function() {
-        speaking = false;
-        if (onend) onend();
-    };
-    window.speechSynthesis.speak(msg);
-}
-
-(function preloadVoices(){
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.getVoices();
-    window.speechSynthesis.onvoiceschanged = function() {
-        window.speechSynthesis.getVoices();
-    };
-})();
-
-// 自动从 LESSONS 数据中提取包含空格的复合词
-function getNeverSplitWords() {
-    const neverSplitWords = new Set();
-    for (let lesson of LESSONS) {
-        for (let word of lesson.words) {
-            // 如果单词包含空格，就加入永不分割列表
-            if (word.includes(' ')) {
-                neverSplitWords.add(word);
-            }
-        }
-    }
-    return Array.from(neverSplitWords);
-}
-
-// 仅对自定义输入文本做切分（课文范围内的词不拆分！）
-function splitCustomWordIfPair(word) {
-    const trimmedWord = word.trim();
-    const neverSplitWords = getNeverSplitWords();
-    
-    if (typeof word === "string" && neverSplitWords.some(ws => trimmedWord.toLowerCase() === ws.toLowerCase())) {
-        return [word];
-    }
-    if (typeof word !== "string") return [word];
-    let arr = word.split(/\s*[,，；;、]\s*/g);
-    arr = arr.map(w=>w.trim()).filter(Boolean);
-    return arr.length>1 ? arr : [word];
-}
-
-// ========== 播放一组单词（如有并列，需要串起来播报） ==========
-function speakWordsGroup(wordsArr, opts, onend) {
-    // 连成一句播报
-    let text = wordsArr.join("，");
-    enhancedSpeak(text, opts, onend);
-}
-
 (function() {
     // LESSONS 已在外部声明
+    // ... 下方所有原 js 逻辑不变 ...
+    // DOM
     const wordsInput = document.getElementById('words');
     const shuffleRadio = document.getElementById('shuffleRadio');
     const orderRadio = document.getElementById('orderRadio');
@@ -503,13 +470,11 @@ function speakWordsGroup(wordsArr, opts, onend) {
     const relistenRow = document.getElementById('relistenRow');
 
     let words = [];
-    let groupWords = []; // 新增，每个单词项实际为一组
     let currentIndex = 0;
     let playing = false;
     let paused = false;
     let timer = null;
     let orderedList = [];
-    let orderedGroupList = [];
     let speechSynthesis = window.speechSynthesis;
     let speaking = false;
     let currentRepeat = 1;
@@ -521,6 +486,29 @@ function speakWordsGroup(wordsArr, opts, onend) {
     let lastIntervalValue = 4;
     let lastRepeatCount = 1;
     let lastRate = 1;
+
+    // ===== 补充下面变量和辅助函数，实现顺序播放时每课首词前朗读课名 =====
+    let wordToLessonNameList = []; // 用于顺序播放时，每个词对应其课文名
+    let lessonNameArr = []; // 选中范围课文名列表
+    let wordsFlatArr = []; // 选中范围内的完整顺序词语数组
+    function buildWordToLessonMapForCurrentRange() {
+        // 用于顺序朗读时，为每个词记录课文名
+        wordToLessonNameList = [];
+        lessonNameArr = [];
+        wordsFlatArr = [];
+        const startIdx = Number(startLessonSel.value);
+        const endIdx = Number(endLessonSel.value);
+        for (let i = startIdx; i <= endIdx; i++) {
+            const lesson = LESSONS[i];
+            // 对当前课的每个词标记课名
+            for (let j = 0; j < lesson.words.length; j++) {
+                wordToLessonNameList.push(lesson.name);
+                wordsFlatArr.push(lesson.words[j]);
+            }
+            lessonNameArr.push(lesson.name);
+        }
+    }
+    // ===============================
 
     function updateShuffle() {
         shuffleCb.checked = shuffleRadio.checked;
@@ -542,63 +530,66 @@ function speakWordsGroup(wordsArr, opts, onend) {
             intervalSetting.classList.add('hide');
         }
     }
-    autoRadio.addEventListener('change', function(){
-        updateAutoNext();
-        if(playing && !paused) {
-            if(autoNextCb.checked) {
-                if (timer) clearTimeout(timer);
-                timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
-                        setTimeout(autoGo, 100);
-                        return;
-                    }
-                    nextWord(true);
-                }, Number(intervalInput.value)*1000);
-            } else {
-                if (timer) clearTimeout(timer);
-            }
-        }
-    });
-    manualRadio.addEventListener('change', function(){
-        updateAutoNext();
-        if(playing && !paused) {
-            if(autoNextCb.checked) {
-                if (timer) clearTimeout(timer);
-                timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
-                        setTimeout(autoGo, 100);
-                        return;
-                    }
-                    nextWord(true);
-                }, Number(intervalInput.value)*1000);
-            } else {
-                if (timer) clearTimeout(timer);
-            }
-        }
-    });
+		autoRadio.addEventListener('change', function(){
+		    updateAutoNext();
+		    if(playing && !paused) {
+		        if (timer) {
+		            clearTimeout(timer);
+		            timer = null;
+		        }
+		        if(autoNextCb.checked && !speaking && currentIndex < orderedList.length - 1) {
+		            timer = setTimeout(function autoGo(){
+		                if (speaking || paused || !playing) {
+		                    setTimeout(autoGo, 100);
+		                    return;
+		                }
+		                nextWord(true);
+		            }, Number(intervalInput.value)*1000);
+		        }
+		    }
+		});
+
+		manualRadio.addEventListener('change', function(){
+		    updateAutoNext();
+		    if(playing && !paused) {
+		        if (timer) {
+		            clearTimeout(timer);
+		            timer = null;
+		        }
+		        // 切换到手动模式时不需要设置定时器
+		    }
+		});
     updateAutoNext();
 
-    intervalEarly.addEventListener('input', function() {
-        intervalInput.value = intervalEarly.value;
-        if(playing && !paused && autoNextCb.checked) {
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(function autoGo(){
-                if (speaking || paused) {
-                    setTimeout(autoGo, 100);
-                    return;
-                }
-                nextWord(true);
-            }, Number(intervalInput.value)*1000);
-        }
-    });
+		intervalEarly.addEventListener('input', function() {
+		    intervalInput.value = intervalEarly.value;
+		    if(playing && !paused && autoNextCb.checked) {
+		        // 清除现有定时器
+		        if (timer) {
+		            clearTimeout(timer);
+		            timer = null;
+		        }
+		        
+		        // 只有当当前词语播放完毕且没有在说话时，才重新设置定时器
+		        if (!speaking && currentIndex < orderedList.length - 1) {
+		            timer = setTimeout(function autoGo(){
+		                if (speaking || paused || !playing) {
+		                    setTimeout(autoGo, 100);
+		                    return;
+		                }
+		                nextWord(true);
+		            }, Number(intervalInput.value)*1000);
+		        }
+		    }
+		});
     repeatCountEarly.addEventListener('input', function() {
         repeatCountInput.value = repeatCountEarly.value;
-        if(playing && !paused && orderedGroupList.length > 0){
+        if(playing && !paused && orderedList.length > 0){
             if (speechSynthesis.speaking) {
                 try { speechSynthesis.cancel(); }catch(e){}
             }
             playCurrentWordWithRepeat(function() {
-                if (autoNextCb.checked && playing && !paused && orderedGroupList.length > 0 && currentIndex < orderedGroupList.length - 1) {
+                if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(function autoGo(){
                         if (speaking || paused) {
@@ -612,17 +603,18 @@ function speakWordsGroup(wordsArr, opts, onend) {
         }
     });
     rateEarly.addEventListener('input', function() {
+        // 只允许整数1-3
         let intVal = parseInt(rateEarly.value) || 1;
         if (intVal < 1) intVal = 1;
         if (intVal > 3) intVal = 3;
         rateEarly.value = intVal;
         rateInput.value = rateEarly.value;
-        if(playing && !paused && orderedGroupList.length > 0){
+        if(playing && !paused && orderedList.length > 0){
             if (speechSynthesis.speaking) {
                 try { speechSynthesis.cancel(); }catch(e){}
             }
             playCurrentWordWithRepeat(function() {
-                if (autoNextCb.checked && playing && !paused && orderedGroupList.length > 0 && currentIndex < orderedGroupList.length - 1) {
+                if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(function autoGo(){
                         if (speaking || paused) {
@@ -655,6 +647,8 @@ function speakWordsGroup(wordsArr, opts, onend) {
         }
         endLessonSel.selectedIndex = LESSONS.length - 1;
     }
+
+    // 修改: 按课文分组返回对象 { 课文名字: [词语数组] }
     function getWordsGroupedByLessonRange(startIdx, endIdx) {
         if (startIdx > endIdx) return {};
         const res = {};
@@ -663,6 +657,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         }
         return res;
     }
+    // 保留原有的数组构造，用于实际听写流程
     function getWordsByLessonRange(startIdx, endIdx) {
         if (startIdx > endIdx) return [];
         const res = [];
@@ -672,26 +667,15 @@ function speakWordsGroup(wordsArr, opts, onend) {
         return res;
     }
     function getWordsArrayFromInput() {
-        // 保持原有的换行分割，不要用空格分割
         let arr = wordsInput.value
-            .split(/[\r\n]+/)  // 只按换行分割
-            .map(w => w.trim())
-            .filter(w => w.length);
+            .replace(/[\r\n]+/g, ' ')
+            .split(/[\s,，、]+/).map(w=>w.trim()).filter(w=>w.length);
         return arr;
     }
 
-    // 自定义输入文本才按分隔符转组，其余（课文内的词）绝不切分
-    function getGroupWordsArray(wordsArr, isCustom = false) {
-        if(!isCustom) {
-            // 课文内的词保持原样，不进行任何分割
-            return wordsArr.map(word => [word]);
-        } else {
-            // 自定义输入才进行分割处理
-            return wordsArr.map(word => splitCustomWordIfPair(word));
-        }
-    }
-
+    // 按课文分块展示词语预览
     function showWordsPreview() {
+        // 获取所选课文区间
         const startIdx = Number(startLessonSel.value);
         const endIdx = Number(endLessonSel.value);
         if (isNaN(startIdx) || isNaN(endIdx) || startIdx > endIdx) {
@@ -700,6 +684,8 @@ function speakWordsGroup(wordsArr, opts, onend) {
             return;
         }
         const grouped = getWordsGroupedByLessonRange(startIdx, endIdx);
+
+        // 如果没有词语
         let hasWords = false;
         Object.values(grouped).forEach(arr => { if (arr.length) hasWords = true; });
         if (!hasWords) {
@@ -714,13 +700,13 @@ function speakWordsGroup(wordsArr, opts, onend) {
             html += `<div class="preview-lesson-words">`;
             for (let i = 0; i < wordArr.length; i++) {
                 let word = wordArr[i];
-                // 课文内的词永远不切分
-                let group = [word];
-                let displayWord = group.join(' / ');
-                let zhongwen = getWordZhongwen(word) || '';
-                let ziHTML = `<div class="zi-text">${displayWord}</div>`;
-                let zhHTML = `<div class="pinyin-text">${zhongwen}</div>`;
-                html += `<span class="pinyin-item">${ziHTML}${zhHTML}</span>`;
+                let pinyins = getWordPinyin(word) || [];
+                // 避免拼音未对齐出错
+                let pinyinHTML = '<div class="pinyin-text" style="display:flex;gap:3px;">'
+                    + word.split('').map((c,j) => `<span>${(pinyins[j]!==undefined?pinyins[j]:"")}</span>`).join('')
+                    + '</div>';
+                let ziHTML = `<div class="zi-text">${word}</div>`;
+                html += `<span class="pinyin-item">${pinyinHTML}${ziHTML}</span>`;
             }
             html += "</div>";
             lessonIdx++;
@@ -728,6 +714,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         wordsPreview.innerHTML = html;
         wordsPreview.classList.remove("hide");
     }
+
     function hideWordsPreview() {
         wordsPreview.classList.add("hide");
     }
@@ -735,6 +722,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         syncWordsInput();
         showWordsPreview();
     }
+    // 填充 textarea 词语（仍为打平行）
     function syncWordsInput() {
         const startIdx = Number(startLessonSel.value);
         const endIdx = Number(endLessonSel.value);
@@ -762,11 +750,41 @@ function speakWordsGroup(wordsArr, opts, onend) {
         }
         return a;
     }
-    // ====== 替换 speak，支持一组朗读 ======
     function speak(text, opts, onend) {
-        enhancedSpeak(text, opts, onend);
+        if (!('speechSynthesis' in window)) {
+            alert("该浏览器不支持语音朗读(speechSynthesis)！");
+            if (onend) onend();
+            return;
+        }
+        if (speechSynthesis.speaking) {
+            try { speechSynthesis.cancel(); } catch(e) {}
+        }
+        let msg = new window.SpeechSynthesisUtterance(text.trim());
+        msg.lang = 'zh-CN';
+        // 用整数rate，只能1-3三档，实际语速设置为(0.4,1,1.4) 分别对应 1,2,3 ，更符合实际
+        let rateVal = 1;
+        if (typeof opts?.rate === 'string' || typeof opts?.rate === 'number') {
+            rateVal = Number(opts.rate);
+        }
+        if (rateVal < 1) rateVal = 1;
+        if (rateVal > 3) rateVal = 3;
+        // 1 => 0.4, 2 => 1, 3 => 1.4
+        let realRate = 1;
+        if (rateVal === 1) realRate = 0.4;
+        else if (rateVal === 2) realRate = 1;
+        else if (rateVal === 3) realRate = 1.4;
+        msg.rate = realRate;
+        speaking = true;
+        msg.onend = function() {
+            speaking = false;
+            if (onend) onend();
+        };
+        msg.onerror = function() {
+            speaking = false;
+            if (onend) onend();
+        };
+        speechSynthesis.speak(msg);
     }
-
     function showStatus(idx, repeatN, totalWords, repeatMax) {
         if (!totalWords || idx < 0 || idx >= totalWords) {
             statusDiv.textContent = "";
@@ -775,208 +793,118 @@ function speakWordsGroup(wordsArr, opts, onend) {
         statusDiv.textContent = `第 ${idx+1} / ${totalWords} 个  |  第 ${repeatN} / ${repeatMax} 次`;
     }
 
-    // 重点改造：一组（group）一起朗读
-		 function playCurrentWordWithRepeat(cb) {
-		    if (!orderedGroupList.length || paused) {
-		        if (cb) cb();
+
+    // ========== 重写 playCurrentWordWithRepeat 函数 ==========
+    function playCurrentWordWithRepeat(cb) {
+        if (!orderedList.length || paused) {
+            if (cb) cb();
+            return;
+        }
+        let repeatMax = Number(repeatCountInput.value) || 1;
+        currentRepeat = 1;
+
+        // 新增变量：用于顺序朗读课名
+        let pendingLessonName = null;
+        let lessonNameToSpeak = null;
+
+        // 仅顺序播放（shuffle=false）生效：
+        if (!shuffleCb.checked) {
+            // 确保最新的映射
+            buildWordToLessonMapForCurrentRange();
+            // 找到orderedList[currentIndex]在wordsFlatArr中的index
+            let allIdx = wordsFlatArr.indexOf(orderedList[currentIndex]);
+            if (allIdx !== -1 && wordToLessonNameList.length === wordsFlatArr.length && wordToLessonNameList.length > 0) {
+                // 在当前顺序中，检测是否为每课第1个词
+                // 只有在第0个 或 前一个词课名不同，则要朗读新的课名
+                if (allIdx === 0 || wordToLessonNameList[allIdx] !== wordToLessonNameList[allIdx-1]) {
+                    // 朗读课名，完毕后朗读词语
+                    pendingLessonName = wordToLessonNameList[allIdx];
+                }
+            }
+        }
+
+        function actuallySpeakWord() {
+            showStatus(currentIndex, currentRepeat, orderedList.length, repeatMax);
+            let intRate = parseInt(rateInput.value) || 1;
+            if (intRate < 1) intRate = 1;
+            if (intRate > 3) intRate = 3;
+            speak(orderedList[currentIndex], { rate: intRate }, function() {
+                if (!playing) { 
+                    if (cb) cb(); 
+                    return; 
+                }
+                if (paused) return;
+                if (currentRepeat < repeatMax) {
+                    currentRepeat++;
+                    setTimeout(actuallySpeakWord, 2000);
+                } else {
+                    currentRepeat = 1;
+                    if (cb) cb();
+                }
+            });
+        }
+
+        if (pendingLessonName) {
+            // 用和词语朗读同样的语速
+            let intRate = parseInt(rateInput.value) || 1;
+            if (intRate < 1) intRate = 1;
+            if (intRate > 3) intRate = 3;
+            speak(pendingLessonName, { rate: intRate }, function() {
+                setTimeout(actuallySpeakWord, 200); // 课名+词之间稍做停顿
+            });
+        } else {
+            actuallySpeakWord();
+        }
+    }
+    // ========== END playCurrentWordWithRepeat 重写 ==========
+
+
+		function nextWord(auto=false) {
+		    if (!orderedList.length || paused) return;
+		    
+		    // 清除现有定时器
+		    if (timer) {
+		        clearTimeout(timer);
+		        timer = null;
+		    }
+		    
+		    currentIndex += 1;
+		    if (currentIndex >= orderedList.length) {
+		        currentIndex = orderedList.length-1;
+		        pausePlay(true);
 		        return;
 		    }
-		    let repeatMax = Number(repeatCountInput.value) || 1;
-		    currentRepeat = 1;
-		    function playOneRepeat() {
-		        if (paused) {
-		            return;
-		        }
-		        showStatus(currentIndex, currentRepeat, orderedGroupList.length, repeatMax);
-		        let intRate = parseInt(rateInput.value) || 1;
-		        if (intRate < 1) intRate = 1;
-		        if (intRate > 3) intRate = 3;
-		        let group = orderedGroupList[currentIndex]; // a group is an array of one或多个
-		        speakWordsGroup(group, { rate: intRate }, function() {
-		            if (!playing) { if (cb) cb(); return; }
-		            if (paused) return;
-		            if (currentRepeat < repeatMax) {
-		                currentRepeat++;
-		                setTimeout(playOneRepeat, 2000);
-		            } else {
-		                currentRepeat = 1;
-		                // 修复自动播放逻辑：在播放完成后检查是否需要播放下一个单词
-		                if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
-		                    if (timer) clearTimeout(timer);
-		                    timer = setTimeout(function autoGo(){
-		                        if (speaking || paused) {
-		                            setTimeout(autoGo, 100);
-		                            return;
-		                        }
-		                        nextWord(true);
-		                    }, Number(intervalInput.value)*1000);
+		    playCurrentWordWithRepeat(function() {
+		        if (autoNextCb.checked && playing && !paused && currentIndex < orderedList.length - 1) {
+		            timer = setTimeout(function waitIfSpeaking(){
+		                if (speaking || paused) {
+		                    setTimeout(waitIfSpeaking, 100);
+		                    return;
 		                }
-		                if (cb) cb();
-		            }
-		        });
-		    }
-		    playOneRepeat();
+		                nextWord(true);
+		            }, Number(intervalInput.value)*1000);
+		        }
+		    });
 		}
 
-    // 关键修正点：用 isCustom 来源区分“分组”行为
-    function startPlay() {
-        if (stopped) return;
-        updateShuffle();
-        updateAutoNext();
-        intervalInput.value = intervalEarly.value;
-        intervalInput.disabled = intervalEarly.disabled;
-        repeatCountInput.value = repeatCountEarly.value;
-        rateInput.value = rateEarly.value;
-
-        // 判断是否自定义输入（和范围选择区分）
-        let isCustom = false;
-        // 只有自定义输入才可能有逗号或分号等
-        let inputValue = wordsInput.value.trim();
-        const startIdx = Number(startLessonSel.value);
-        const endIdx = Number(endLessonSel.value);
-        // 如果输入框内容和当前课文范围选择对应的内容不同，就认为自定义了
-        let fromRange = getWordsByLessonRange(startIdx, endIdx).join('\n');
-        if (inputValue !== fromRange) isCustom = true;
-
-        words = getWordsArrayFromInput();
-        groupWords = getGroupWordsArray(words, isCustom);
-        if (groupWords.length === 0) {
-            alert("请先选择课文范围，或填写词语！");
-            return;
-        }
-        orderedList = shuffleCb.checked ? shuffleArr(words) : words.slice();
-        orderedGroupList = shuffleCb.checked ? shuffleArr(groupWords) : groupWords.slice();
-
-        currentIndex = 0;
-        currentRepeat = 1;
-        playing = true;
-        paused = false;
-        stopped = false;
-        lastWordsArr = words.slice();
-        lastShuffleChecked = shuffleCb.checked;
-        lastAutoNextChecked = autoNextCb.checked;
-        lastIntervalValue = intervalInput.value;
-        lastRepeatCount = repeatCountInput.value;
-        lastRate = rateInput.value;
-        lastOrderedList = orderedList.slice();
-
-        startBtn.disabled = true;
-        pauseContinueBtn.disabled = false;
-        pauseContinueBtn.textContent = "暂停";
-        prevBtn.disabled = false;
-        nextBtn.disabled = false;
-        resetBtn.style.display = 'none';
-        hideWordsPreview();
-        statusDiv.textContent = "";
-        playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused && orderedGroupList.length > 0 && currentIndex < orderedGroupList.length - 1) {
-                if (timer) clearTimeout(timer);
-                timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
-                        setTimeout(autoGo, 100);
-                        return;
-                    }
-                    nextWord(true);
-                }, Number(intervalInput.value)*1000);
-            }
-        });
-    }
-
-    function restartPlay() {
-        if (!lastWordsArr.length) {
-            alert("没有可重新听写的词语（请先点击“开始”完整听写一轮）");
-            return;
-        }
-        updateShuffle();
-        updateAutoNext();
-        intervalInput.value = intervalEarly.value;
-        intervalInput.disabled = intervalEarly.disabled;
-        repeatCountInput.value = repeatCountEarly.value;
-        rateInput.value = rateEarly.value;
-
-        // 判别上一次是不是自定义
-        let isCustom = false;
-        const startIdx = Number(startLessonSel.value);
-        const endIdx = Number(endLessonSel.value);
-        let inputValue = wordsInput.value.trim();
-        let fromRange = getWordsByLessonRange(startIdx, endIdx).join('\n');
-        if (inputValue !== fromRange) isCustom = true;
-
-        words = getWordsArrayFromInput();
-        groupWords = getGroupWordsArray(words, isCustom);
-        if (groupWords.length === 0) {
-            alert("请先选择课文范围，或填写词语！");
-            return;
-        }
-        orderedList = shuffleCb.checked ? shuffleArr(words) : words.slice();
-        orderedGroupList = shuffleCb.checked ? shuffleArr(groupWords) : groupWords.slice();
-
-        currentIndex = 0;
-        currentRepeat = 1;
-        playing = true;
-        paused = false;
-        stopped = false;
-        lastWordsArr = words.slice();
-        lastShuffleChecked = shuffleCb.checked;
-        lastAutoNextChecked = autoNextCb.checked;
-        lastIntervalValue = intervalInput.value;
-        lastRepeatCount = repeatCountInput.value;
-        lastRate = rateInput.value;
-        lastOrderedList = orderedList.slice();
-
-        startBtn.disabled = true;
-        pauseContinueBtn.disabled = false;
-        pauseContinueBtn.textContent = "暂停";
-        prevBtn.disabled = false;
-        nextBtn.disabled = false;
-        resetBtn.style.display = 'none';
-        hideWordsPreview();
-        statusDiv.textContent = "";
-        playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused && orderedGroupList.length > 0 && currentIndex < orderedGroupList.length - 1) {
-                if (timer) clearTimeout(timer);
-                timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
-                        setTimeout(autoGo, 100);
-                        return;
-                    }
-                    nextWord(true);
-                }, Number(intervalInput.value)*1000);
-            }
-        });
-    }
-
-    function nextWord(auto=false) {
-        if (!orderedGroupList.length || paused) return;
-        currentIndex += 1;
-        if (currentIndex >= orderedGroupList.length) {
-            currentIndex = orderedGroupList.length-1;
-            pausePlay(true);
-            return;
-        }
-        playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused) {
-                timer = setTimeout(function waitIfSpeaking(){
-                    if (speaking || paused) {
-                        setTimeout(waitIfSpeaking, 100);
-                        return;
-                    }
-                    nextWord(true);
-                }, Number(intervalInput.value)*1000);
-            }
-        });
-    }
-    function prevWord() {
-        if (!orderedGroupList.length || paused) return;
-        if (currentIndex > 0) {
-            currentIndex -= 1;
-            currentRepeat = 1;
-            playCurrentWordWithRepeat();
-        } else {
-            currentRepeat = 1;
-            playCurrentWordWithRepeat();
-        }
-    }
+		function prevWord() {
+		    if (!orderedList.length || paused) return;
+		    
+		    // 清除现有定时器
+		    if (timer) {
+		        clearTimeout(timer);
+		        timer = null;
+		    }
+		    
+		    if (currentIndex > 0) {
+		        currentIndex -= 1;
+		        currentRepeat = 1;
+		        playCurrentWordWithRepeat();
+		    } else {
+		        currentRepeat = 1;
+		        playCurrentWordWithRepeat();
+		    }
+		}
     function pausePlay(forceStop = false) {
         if (timer) clearTimeout(timer);
         timer = null;
@@ -1035,9 +963,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         timer = null;
         currentIndex = 0;
         words = [];
-        groupWords = [];
         orderedList = [];
-        orderedGroupList = [];
         currentRepeat = 1;
         statusDiv.textContent = "";
         startBtn.disabled = false;
@@ -1055,6 +981,123 @@ function speakWordsGroup(wordsArr, opts, onend) {
         repeatCountInput.value = repeatCountEarly.value;
         rateInput.value = rateEarly.value;
         try{ speechSynthesis.cancel(); }catch(e){}
+    }
+    function startPlay() {
+        // 在函数开头添加定时器清理
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+        if (stopped) return;
+        updateShuffle();
+        updateAutoNext();
+        intervalInput.value = intervalEarly.value;
+        intervalInput.disabled = intervalEarly.disabled;
+        repeatCountInput.value = repeatCountEarly.value;
+        rateInput.value = rateEarly.value;
+
+        words = getWordsArrayFromInput();
+        if (words.length === 0) {
+            alert("请先选择课文范围，或填写词语！");
+            return;
+        }
+        orderedList = shuffleCb.checked ? shuffleArr(words) : words.slice();
+        currentIndex = 0;
+        currentRepeat = 1;
+        playing = true;
+        paused = false;
+        stopped = false;
+        lastWordsArr = words.slice();
+        lastShuffleChecked = shuffleCb.checked;
+        lastAutoNextChecked = autoNextCb.checked;
+        lastIntervalValue = intervalInput.value;
+        lastRepeatCount = repeatCountInput.value;
+        lastRate = rateInput.value;
+        lastOrderedList = orderedList.slice();
+
+        // 若顺序，更新映射
+        if (!shuffleCb.checked) buildWordToLessonMapForCurrentRange();
+
+        startBtn.disabled = true;
+        pauseContinueBtn.disabled = false;
+        pauseContinueBtn.textContent = "暂停";
+        prevBtn.disabled = false;
+        nextBtn.disabled = false;
+        resetBtn.style.display = 'none';
+        hideWordsPreview();
+        statusDiv.textContent = "";
+        playCurrentWordWithRepeat(function() {
+            if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(function autoGo(){
+                    if (speaking || paused) {
+                        setTimeout(autoGo, 100);
+                        return;
+                    }
+                    nextWord(true);
+                }, Number(intervalInput.value)*1000);
+            }
+        });
+    }
+    function restartPlay() {
+        // 在函数开头添加定时器清理
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+        if (!lastWordsArr.length) {
+            alert("没有可重新听写的词语（请先点击“开始”完整听写一轮）");
+            return;
+        }
+        updateShuffle();
+        updateAutoNext();
+        intervalInput.value = intervalEarly.value;
+        intervalInput.disabled = intervalEarly.disabled;
+        repeatCountInput.value = repeatCountEarly.value;
+        rateInput.value = rateEarly.value;
+
+        words = getWordsArrayFromInput();
+        if (words.length === 0) {
+            alert("请先选择课文范围，或填写词语！");
+            return;
+        }
+        orderedList = shuffleCb.checked ? shuffleArr(words) : words.slice();
+        currentIndex = 0;
+        currentRepeat = 1;
+        playing = true;
+        paused = false;
+        stopped = false;
+        lastWordsArr = words.slice();
+        lastShuffleChecked = shuffleCb.checked;
+        lastAutoNextChecked = autoNextCb.checked;
+        lastIntervalValue = intervalInput.value;
+        lastRepeatCount = repeatCountInput.value;
+        lastRate = rateInput.value;
+        lastOrderedList = orderedList.slice();
+
+        // 若顺序，更新映射
+        if (!shuffleCb.checked) buildWordToLessonMapForCurrentRange();
+
+        startBtn.disabled = true;
+        pauseContinueBtn.disabled = false;
+        pauseContinueBtn.textContent = "暂停";
+        prevBtn.disabled = false;
+        nextBtn.disabled = false;
+        resetBtn.style.display = 'none';
+        hideWordsPreview();
+        statusDiv.textContent = "";
+        playCurrentWordWithRepeat(function() {
+            if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(function autoGo(){
+                    if (speaking || paused) {
+                        setTimeout(autoGo, 100);
+                        return;
+                    }
+                    nextWord(true);
+                }, Number(intervalInput.value)*1000);
+            }
+        });
     }
 
     startBtn.addEventListener('click', () => {
@@ -1079,13 +1122,14 @@ function speakWordsGroup(wordsArr, opts, onend) {
     });
 
     nextBtn.addEventListener('click', () => {
-        if (!orderedGroupList.length || paused) return;
-        if (timer) clearTimeout(timer);
-        if (currentIndex < orderedGroupList.length-1) {
+        if (!orderedList.length || paused) return;
+        if (timer) clearTimeout(timer);  // 清除现有定时器
+        timer = null;  // 添加这一行，确保定时器完全重置
+        if (currentIndex < orderedList.length-1) {
             currentIndex++;
             currentRepeat = 1;
             playCurrentWordWithRepeat(function() {
-                if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
+                if (autoNextCb.checked && playing && !paused && currentIndex < orderedList.length - 1) {
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(function autoGo(){
                         if (speaking || paused) {
@@ -1100,7 +1144,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
     });
 
     prevBtn.addEventListener('click', () => {
-        if (!orderedGroupList.length || paused) return;
+        if (!orderedList.length || paused) return;
         if (timer) clearTimeout(timer);
         prevWord();
     });
@@ -1112,8 +1156,8 @@ function speakWordsGroup(wordsArr, opts, onend) {
     updateWordsPreviewOnRangeChange();
 
     wordsInput.addEventListener('input', function() {
+        // 用户自定义编辑文本时，不使用分组，只用自动分词+打平方式。
         let arr = getWordsArrayFromInput();
-        let groupArr = getGroupWordsArray(arr, true); // 这里始终以自定义分组处理
         if(arr.length === 0) {
             wordsPreview.innerHTML = "<span style='color:#c44'>（当前无词语）</span>";
             wordsPreview.classList.remove("hide");
@@ -1123,12 +1167,12 @@ function speakWordsGroup(wordsArr, opts, onend) {
         html += `<div class="preview-lesson-words">`;
         for (let i = 0; i < arr.length; i++) {
             let word = arr[i];
-            let group = groupArr[i];
-            let displayWord = group.join(' / ');
-            let zhongwen = getWordZhongwen(word) || '';
-            let ziHTML = `<div class="zi-text">${displayWord}</div>`;
-            let zhHTML = `<div class="pinyin-text">${zhongwen}</div>`;
-            html += `<span class="pinyin-item">${ziHTML}${zhHTML}</span>`;
+            let pinyins = getWordPinyin(word) || [];
+            let pinyinHTML = '<div class="pinyin-text" style="display:flex;gap:3px;">'
+                + word.split('').map((c,j) => `<span>${(pinyins[j]!==undefined?pinyins[j]:"")}</span>`).join('')
+                + '</div>';
+            let ziHTML = `<div class="zi-text">${word}</div>`;
+            html += `<span class="pinyin-item">${pinyinHTML}${ziHTML}</span>`;
         }
         html += "</div>";
         wordsPreview.innerHTML = html;
