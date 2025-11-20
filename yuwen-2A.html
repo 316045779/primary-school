@@ -1039,54 +1039,34 @@ function getWordPinyin(word) {
         });
     }
     function restartPlay() {
-        // 在函数开头添加定时器清理
         if (timer) {
             clearTimeout(timer);
             timer = null;
         }
-        if (!lastWordsArr.length) {
-            alert("没有可重新听写的词语（请先点击“开始”完整听写一轮）");
+        
+        // 如果没有在播放，或者已经停止，就重新开始整个听写
+        if (!playing || stopped) {
+            startPlay();
             return;
         }
-        updateShuffle();
-        updateAutoNext();
-        intervalInput.value = intervalEarly.value;
-        intervalInput.disabled = intervalEarly.disabled;
-        repeatCountInput.value = repeatCountEarly.value;
-        rateInput.value = rateEarly.value;
-
-        words = getWordsArrayFromInput();
-        if (words.length === 0) {
-            alert("请先选择课文范围，或填写词语！");
-            return;
+        
+        // 如果在播放状态，只是重新播放当前词语（从当前位置继续）
+        if (paused) {
+            // 如果处于暂停状态，先取消暂停
+            paused = false;
+            pauseContinueBtn.textContent = "暂停";
+            pauseContinueBtn.disabled = false;
+            prevBtn.disabled = false;
+            nextBtn.disabled = false;
+            statusDiv.textContent = statusDiv.textContent.replace(/｜已暂停$/, "");
         }
-        orderedList = shuffleCb.checked ? shuffleArr(words) : words.slice();
-        currentIndex = 0;
+        
+        // 重新播放当前词语
         currentRepeat = 1;
-        playing = true;
-        paused = false;
-        stopped = false;
-        lastWordsArr = words.slice();
-        lastShuffleChecked = shuffleCb.checked;
-        lastAutoNextChecked = autoNextCb.checked;
-        lastIntervalValue = intervalInput.value;
-        lastRepeatCount = repeatCountInput.value;
-        lastRate = rateInput.value;
-        lastOrderedList = orderedList.slice();
-
-        // 若顺序，更新映射
-        if (!shuffleCb.checked) buildWordToLessonMapForCurrentRange();
-
-        startBtn.disabled = true;
-        pauseContinueBtn.disabled = false;
-        pauseContinueBtn.textContent = "暂停";
-        prevBtn.disabled = false;
-        nextBtn.disabled = false;
-        resetBtn.style.display = 'none';
         hideWordsPreview();
-        statusDiv.textContent = "";
+        
         playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused && !stopped && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
+            if (autoNextCb.checked && playing && !paused && !stopped && currentIndex < orderedList.length - 1) {
                 if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
                     if (speaking || paused || !playing || stopped) {
@@ -1200,4 +1180,5 @@ function getWordPinyin(word) {
 })();
 </script>
 </body>
+
 </html>
