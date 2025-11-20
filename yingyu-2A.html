@@ -776,49 +776,49 @@ function speakWordsGroup(wordsArr, opts, onend) {
     }
 
     // 重点改造：一组（group）一起朗读
-    function playCurrentWordWithRepeat(cb) {
-        if (!orderedGroupList.length || paused) {
-            if (cb) cb();
-            return;
-        }
-        let repeatMax = Number(repeatCountInput.value) || 1;
-        currentRepeat = 1;
-        function playOneRepeat() {
-            if (paused) {
-                return;
-            }
-            showStatus(currentIndex, currentRepeat, orderedGroupList.length, repeatMax);
-            let intRate = parseInt(rateInput.value) || 1;
-            if (intRate < 1) intRate = 1;
-            if (intRate > 3) intRate = 3;
-            let group = orderedGroupList[currentIndex]; // a group is an array of one或多个
-            speakWordsGroup(group, { rate: intRate }, function() {
-                if (!playing) { if (cb) cb(); return; }
-                if (paused) return;
-                if (currentRepeat < repeatMax) {
-                    currentRepeat++;
-                    setTimeout(playOneRepeat, 2000);
-                } else {
-                    currentRepeat = 1;
-                    // 修复自动播放逻辑：在播放完成后检查是否需要播放下一个单词
-                    if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
-                        if (timer) clearTimeout(timer);
-                        timer = setTimeout(function autoGo(){
-                            if (speaking || paused) {
-                                setTimeout(autoGo, 100);
-                                return;
-                            }
-                            nextWord(true);
-                        }, Number(intervalInput.value)*1000);
-                    }
-                    if (cb) cb();
-                }
-            });
-        }
-        playOneRepeat();
-    }
+		 function playCurrentWordWithRepeat(cb) {
+		    if (!orderedGroupList.length || paused) {
+		        if (cb) cb();
+		        return;
+		    }
+		    let repeatMax = Number(repeatCountInput.value) || 1;
+		    currentRepeat = 1;
+		    function playOneRepeat() {
+		        if (paused) {
+		            return;
+		        }
+		        showStatus(currentIndex, currentRepeat, orderedGroupList.length, repeatMax);
+		        let intRate = parseInt(rateInput.value) || 1;
+		        if (intRate < 1) intRate = 1;
+		        if (intRate > 3) intRate = 3;
+		        let group = orderedGroupList[currentIndex]; // a group is an array of one或多个
+		        speakWordsGroup(group, { rate: intRate }, function() {
+		            if (!playing) { if (cb) cb(); return; }
+		            if (paused) return;
+		            if (currentRepeat < repeatMax) {
+		                currentRepeat++;
+		                setTimeout(playOneRepeat, 2000);
+		            } else {
+		                currentRepeat = 1;
+		                // 修复自动播放逻辑：在播放完成后检查是否需要播放下一个单词
+		                if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
+		                    if (timer) clearTimeout(timer);
+		                    timer = setTimeout(function autoGo(){
+		                        if (speaking || paused) {
+		                            setTimeout(autoGo, 100);
+		                            return;
+		                        }
+		                        nextWord(true);
+		                    }, Number(intervalInput.value)*1000);
+		                }
+		                if (cb) cb();
+		            }
+		        });
+		    }
+		    playOneRepeat();
+		}
 
-    // 关键修正点：用 isCustom 来源区分"分组"行为
+    // 关键修正点：用 isCustom 来源区分“分组”行为
     function startPlay() {
         if (stopped) return;
         updateShuffle();
@@ -884,7 +884,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
 
     function restartPlay() {
         if (!lastWordsArr.length) {
-            alert("没有可重新听写的词语（请先点击"开始"完整听写一轮）");
+            alert("没有可重新听写的词语（请先点击“开始”完整听写一轮）");
             return;
         }
         updateShuffle();
@@ -1152,5 +1152,3 @@ function speakWordsGroup(wordsArr, opts, onend) {
     updateAutoNext();
 })();
 </script>
-</body>
-</html>
