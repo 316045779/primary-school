@@ -787,7 +787,7 @@ function getWordPinyin(word) {
                 if (paused) return;
                 if (currentRepeat < repeatMax) {
                     currentRepeat++;
-                    setTimeout(playOneRepeat, 450);
+                    setTimeout(playOneRepeat, 2000);
                 } else {
                     currentRepeat = 1;
                     if (cb) cb();
