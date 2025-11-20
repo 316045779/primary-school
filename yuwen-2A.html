@@ -535,12 +535,14 @@ function getWordPinyin(word) {
         if(playing && !paused) {
             if (timer) {
                 clearTimeout(timer);
-                timer = null;  // 添加这一行
+                timer = null;
             }
-            if(autoNextCb.checked) {
+            if(autoNextCb.checked && currentIndex < orderedList.length - 1) {
                 timer = setTimeout(function autoGo(){
-                    if (speaking || paused || !playing) {  // 增加 !playing 检查
-                        setTimeout(autoGo, 100);
+                    if (speaking || paused || !playing || stopped) {
+                        if (playing && !paused && !stopped) {
+                            setTimeout(autoGo, 100);
+                        }
                         return;
                     }
                     nextWord(true);
@@ -551,34 +553,25 @@ function getWordPinyin(word) {
 
     manualRadio.addEventListener('change', function(){
         updateAutoNext();
-        if(playing && !paused) {
-            if (timer) {
-                clearTimeout(timer);
-                timer = null;  // 添加这一行
-            }
-            if(autoNextCb.checked) {
-                timer = setTimeout(function autoGo(){
-                    if (speaking || paused || !playing) {  // 增加 !playing 检查
-                        setTimeout(autoGo, 100);
-                        return;
-                    }
-                    nextWord(true);
-                }, Number(intervalInput.value)*1000);
-            }
+        if(playing && !paused && timer) {
+            clearTimeout(timer);
+            timer = null;
         }
     });
     updateAutoNext();
 
     intervalEarly.addEventListener('input', function() {
         intervalInput.value = intervalEarly.value;
-        if(playing && !paused && autoNextCb.checked) {
+        if(playing && !paused && autoNextCb.checked && currentIndex < orderedList.length - 1) {
             if (timer) {
                 clearTimeout(timer);
-                timer = null;  // 添加这一行
+                timer = null;
             }
             timer = setTimeout(function autoGo(){
-                if (speaking || paused || !playing) {  // 增加 !playing 检查
-                    setTimeout(autoGo, 100);
+                if (speaking || paused || !playing || stopped) {
+                    if (playing && !paused && !stopped) {
+                        setTimeout(autoGo, 100);
+                    }
                     return;
                 }
                 nextWord(true);
@@ -592,11 +585,13 @@ function getWordPinyin(word) {
                 try { speechSynthesis.cancel(); }catch(e){}
             }
             playCurrentWordWithRepeat(function() {
-                if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
+                if (autoNextCb.checked && playing && !paused && !stopped && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(function autoGo(){
-                        if (speaking || paused) {
-                            setTimeout(autoGo, 100);
+                        if (speaking || paused || !playing || stopped) {
+                            if (playing && !paused && !stopped) {
+                                setTimeout(autoGo, 100);
+                            }
                             return;
                         }
                         nextWord(true);
@@ -617,11 +612,13 @@ function getWordPinyin(word) {
                 try { speechSynthesis.cancel(); }catch(e){}
             }
             playCurrentWordWithRepeat(function() {
-                if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
+                if (autoNextCb.checked && playing && !paused && !stopped && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(function autoGo(){
-                        if (speaking || paused) {
-                            setTimeout(autoGo, 100);
+                        if (speaking || paused || !playing || stopped) {
+                            if (playing && !paused && !stopped) {
+                                setTimeout(autoGo, 100);
+                            }
                             return;
                         }
                         nextWord(true);
@@ -799,7 +796,7 @@ function getWordPinyin(word) {
 
     // ========== 重写 playCurrentWordWithRepeat 函数 ==========
     function playCurrentWordWithRepeat(cb) {
-        if (!orderedList.length || paused) {
+        if (!orderedList.length || paused || !playing || stopped) {
             if (cb) cb();
             return;
         }
@@ -832,7 +829,7 @@ function getWordPinyin(word) {
             if (intRate < 1) intRate = 1;
             if (intRate > 3) intRate = 3;
             speak(orderedList[currentIndex], { rate: intRate }, function() {
-                if (!playing) { 
+                if (!playing || stopped) { 
                     if (cb) cb(); 
                     return; 
                 }
@@ -853,6 +850,10 @@ function getWordPinyin(word) {
             if (intRate < 1) intRate = 1;
             if (intRate > 3) intRate = 3;
             speak(pendingLessonName, { rate: intRate }, function() {
+                if (!playing || stopped) {
+                    if (cb) cb();
+                    return;
+                }
                 setTimeout(actuallySpeakWord, 200); // 课名+词之间稍做停顿
             });
         } else {
@@ -863,18 +864,23 @@ function getWordPinyin(word) {
 
 
     function nextWord(auto=false) {
-        if (!orderedList.length || paused) return;
+        if (!orderedList.length || paused || !playing || stopped) return;
+        
         currentIndex += 1;
         if (currentIndex >= orderedList.length) {
             currentIndex = orderedList.length-1;
             pausePlay(true);
             return;
         }
+        
         playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused) {
+            if (autoNextCb.checked && playing && !paused && !stopped && currentIndex < orderedList.length - 1) {
+                if (timer) clearTimeout(timer);
                 timer = setTimeout(function waitIfSpeaking(){
-                    if (speaking || paused) {
-                        setTimeout(waitIfSpeaking, 100);
+                    if (speaking || paused || !playing || stopped) {
+                        if (playing && !paused && !stopped) {
+                            setTimeout(waitIfSpeaking, 100);
+                        }
                         return;
                     }
                     nextWord(true);
@@ -930,12 +936,15 @@ function getWordPinyin(word) {
         prevBtn.disabled = false;
         nextBtn.disabled = false;
         if (!playing || stopped) return;
+        
         playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused) {
+            if (autoNextCb.checked && playing && !paused && !stopped && currentIndex < orderedList.length - 1) {
                 if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
-                        setTimeout(autoGo, 100);
+                    if (speaking || paused || !playing || stopped) {
+                        if (playing && !paused && !stopped) {
+                            setTimeout(autoGo, 100);
+                        }
                         return;
                     }
                     nextWord(true);
@@ -1015,11 +1024,13 @@ function getWordPinyin(word) {
         hideWordsPreview();
         statusDiv.textContent = "";
         playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
+            if (autoNextCb.checked && playing && !paused && !stopped && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
                 if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
-                        setTimeout(autoGo, 100);
+                    if (speaking || paused || !playing || stopped) {
+                        if (playing && !paused && !stopped) {
+                            setTimeout(autoGo, 100);
+                        }
                         return;
                     }
                     nextWord(true);
@@ -1075,11 +1086,13 @@ function getWordPinyin(word) {
         hideWordsPreview();
         statusDiv.textContent = "";
         playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
+            if (autoNextCb.checked && playing && !paused && !stopped && orderedList.length > 0 && currentIndex < orderedList.length - 1) {
                 if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
-                    if (speaking || paused) {
-                        setTimeout(autoGo, 100);
+                    if (speaking || paused || !playing || stopped) {
+                        if (playing && !paused && !stopped) {
+                            setTimeout(autoGo, 100);
+                        }
                         return;
                     }
                     nextWord(true);
@@ -1117,11 +1130,13 @@ function getWordPinyin(word) {
             currentIndex++;
             currentRepeat = 1;
             playCurrentWordWithRepeat(function() {
-                if (autoNextCb.checked && playing && !paused && currentIndex < orderedList.length - 1) {
+                if (autoNextCb.checked && playing && !paused && !stopped && currentIndex < orderedList.length - 1) {
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(function autoGo(){
-                        if (speaking || paused) {
-                            setTimeout(autoGo, 100);
+                        if (speaking || paused || !playing || stopped) {
+                            if (playing && !paused && !stopped) {
+                                setTimeout(autoGo, 100);
+                            }
                             return;
                         }
                         nextWord(true);
@@ -1184,3 +1199,5 @@ function getWordPinyin(word) {
     updateAutoNext();
 })();
 </script>
+</body>
+</html>
