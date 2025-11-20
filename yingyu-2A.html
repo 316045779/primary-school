@@ -775,7 +775,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         statusDiv.textContent = `第 ${idx+1} / ${totalWords} 个  |  第 ${repeatN} / ${repeatMax} 次`;
     }
 
-    // 重点改造：一组（group）一起朗读
+    // 修复自动播放逻辑
     function playCurrentWordWithRepeat(cb) {
         if (!orderedGroupList.length || paused) {
             if (cb) cb();
@@ -783,6 +783,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         }
         let repeatMax = Number(repeatCountInput.value) || 1;
         currentRepeat = 1;
+        
         function playOneRepeat() {
             if (paused) {
                 return;
@@ -791,15 +792,30 @@ function speakWordsGroup(wordsArr, opts, onend) {
             let intRate = parseInt(rateInput.value) || 1;
             if (intRate < 1) intRate = 1;
             if (intRate > 3) intRate = 3;
-            let group = orderedGroupList[currentIndex]; // a group is an array of one或多个
+            let group = orderedGroupList[currentIndex];
             speakWordsGroup(group, { rate: intRate }, function() {
-                if (!playing) { if (cb) cb(); return; }
+                if (!playing) { 
+                    if (cb) cb(); 
+                    return; 
+                }
                 if (paused) return;
+                
                 if (currentRepeat < repeatMax) {
                     currentRepeat++;
                     setTimeout(playOneRepeat, 2000);
                 } else {
                     currentRepeat = 1;
+                    // 修复：只有在自动播放模式下才设置下一个单词的定时器
+                    if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
+                        if (timer) clearTimeout(timer);
+                        timer = setTimeout(function() {
+                            if (speaking || paused) {
+                                setTimeout(arguments.callee, 100);
+                                return;
+                            }
+                            nextWord(true);
+                        }, Number(intervalInput.value) * 1000);
+                    }
                     if (cb) cb();
                 }
             });
@@ -807,7 +823,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         playOneRepeat();
     }
 
-    // 关键修正点：用 isCustom 来源区分“分组”行为
+    // 关键修正点：用 isCustom 来源区分"分组"行为
     function startPlay() {
         if (stopped) return;
         updateShuffle();
@@ -858,6 +874,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
         hideWordsPreview();
         statusDiv.textContent = "";
         playCurrentWordWithRepeat(function() {
+            // 修复：只有在自动播放模式下且还有下一个单词时才设置定时器
             if (autoNextCb.checked && playing && !paused && orderedGroupList.length > 0 && currentIndex < orderedGroupList.length - 1) {
                 if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
@@ -873,7 +890,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
 
     function restartPlay() {
         if (!lastWordsArr.length) {
-            alert("没有可重新听写的词语（请先点击“开始”完整听写一轮）");
+            alert("没有可重新听写的词语（请先点击"开始"完整听写一轮）");
             return;
         }
         updateShuffle();
@@ -944,7 +961,9 @@ function speakWordsGroup(wordsArr, opts, onend) {
             return;
         }
         playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused) {
+            // 修复：只有在自动播放模式下且还有下一个单词时才设置定时器
+            if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
+                if (timer) clearTimeout(timer);
                 timer = setTimeout(function waitIfSpeaking(){
                     if (speaking || paused) {
                         setTimeout(waitIfSpeaking, 100);
@@ -1004,7 +1023,8 @@ function speakWordsGroup(wordsArr, opts, onend) {
         nextBtn.disabled = false;
         if (!playing || stopped) return;
         playCurrentWordWithRepeat(function() {
-            if (autoNextCb.checked && playing && !paused) {
+            // 修复：只有在自动播放模式下且还有下一个单词时才设置定时器
+            if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
                 if (timer) clearTimeout(timer);
                 timer = setTimeout(function autoGo(){
                     if (speaking || paused) {
@@ -1074,6 +1094,7 @@ function speakWordsGroup(wordsArr, opts, onend) {
             currentIndex++;
             currentRepeat = 1;
             playCurrentWordWithRepeat(function() {
+                // 修复：只有在自动播放模式下且还有下一个单词时才设置定时器
                 if (autoNextCb.checked && playing && !paused && currentIndex < orderedGroupList.length - 1) {
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(function autoGo(){
@@ -1141,3 +1162,5 @@ function speakWordsGroup(wordsArr, opts, onend) {
     updateAutoNext();
 })();
 </script>
+</body>
+</html>
