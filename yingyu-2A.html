@@ -530,58 +530,61 @@ function getWordPinyin(word) {
             intervalSetting.classList.add('hide');
         }
     }
-		autoRadio.addEventListener('change', function(){
-		    updateAutoNext();
-		    if(playing && !paused) {
-		        if (timer) {
-		            clearTimeout(timer);
-		            timer = null;
-		        }
-		        if(autoNextCb.checked && !speaking && currentIndex < orderedList.length - 1) {
-		            timer = setTimeout(function autoGo(){
-		                if (speaking || paused || !playing) {
-		                    setTimeout(autoGo, 100);
-		                    return;
-		                }
-		                nextWord(true);
-		            }, Number(intervalInput.value)*1000);
-		        }
-		    }
-		});
+    autoRadio.addEventListener('change', function(){
+        updateAutoNext();
+        if(playing && !paused) {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;  // 添加这一行
+            }
+            if(autoNextCb.checked) {
+                timer = setTimeout(function autoGo(){
+                    if (speaking || paused || !playing) {  // 增加 !playing 检查
+                        setTimeout(autoGo, 100);
+                        return;
+                    }
+                    nextWord(true);
+                }, Number(intervalInput.value)*1000);
+            }
+        }
+    });
 
-		manualRadio.addEventListener('change', function(){
-		    updateAutoNext();
-		    if(playing && !paused) {
-		        if (timer) {
-		            clearTimeout(timer);
-		            timer = null;
-		        }
-		        // 切换到手动模式时不需要设置定时器
-		    }
-		});
+    manualRadio.addEventListener('change', function(){
+        updateAutoNext();
+        if(playing && !paused) {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;  // 添加这一行
+            }
+            if(autoNextCb.checked) {
+                timer = setTimeout(function autoGo(){
+                    if (speaking || paused || !playing) {  // 增加 !playing 检查
+                        setTimeout(autoGo, 100);
+                        return;
+                    }
+                    nextWord(true);
+                }, Number(intervalInput.value)*1000);
+            }
+        }
+    });
     updateAutoNext();
 
-		intervalEarly.addEventListener('input', function() {
-		    intervalInput.value = intervalEarly.value;
-		    if(playing && !paused && autoNextCb.checked) {
-		        // 清除现有定时器
-		        if (timer) {
-		            clearTimeout(timer);
-		            timer = null;
-		        }
-		        
-		        // 只有当当前词语播放完毕且没有在说话时，才重新设置定时器
-		        if (!speaking && currentIndex < orderedList.length - 1) {
-		            timer = setTimeout(function autoGo(){
-		                if (speaking || paused || !playing) {
-		                    setTimeout(autoGo, 100);
-		                    return;
-		                }
-		                nextWord(true);
-		            }, Number(intervalInput.value)*1000);
-		        }
-		    }
-		});
+    intervalEarly.addEventListener('input', function() {
+        intervalInput.value = intervalEarly.value;
+        if(playing && !paused && autoNextCb.checked) {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;  // 添加这一行
+            }
+            timer = setTimeout(function autoGo(){
+                if (speaking || paused || !playing) {  // 增加 !playing 检查
+                    setTimeout(autoGo, 100);
+                    return;
+                }
+                nextWord(true);
+            }, Number(intervalInput.value)*1000);
+        }
+    });
     repeatCountEarly.addEventListener('input', function() {
         repeatCountInput.value = repeatCountEarly.value;
         if(playing && !paused && orderedList.length > 0){
@@ -859,52 +862,37 @@ function getWordPinyin(word) {
     // ========== END playCurrentWordWithRepeat 重写 ==========
 
 
-		function nextWord(auto=false) {
-		    if (!orderedList.length || paused) return;
-		    
-		    // 清除现有定时器
-		    if (timer) {
-		        clearTimeout(timer);
-		        timer = null;
-		    }
-		    
-		    currentIndex += 1;
-		    if (currentIndex >= orderedList.length) {
-		        currentIndex = orderedList.length-1;
-		        pausePlay(true);
-		        return;
-		    }
-		    playCurrentWordWithRepeat(function() {
-		        if (autoNextCb.checked && playing && !paused && currentIndex < orderedList.length - 1) {
-		            timer = setTimeout(function waitIfSpeaking(){
-		                if (speaking || paused) {
-		                    setTimeout(waitIfSpeaking, 100);
-		                    return;
-		                }
-		                nextWord(true);
-		            }, Number(intervalInput.value)*1000);
-		        }
-		    });
-		}
-
-		function prevWord() {
-		    if (!orderedList.length || paused) return;
-		    
-		    // 清除现有定时器
-		    if (timer) {
-		        clearTimeout(timer);
-		        timer = null;
-		    }
-		    
-		    if (currentIndex > 0) {
-		        currentIndex -= 1;
-		        currentRepeat = 1;
-		        playCurrentWordWithRepeat();
-		    } else {
-		        currentRepeat = 1;
-		        playCurrentWordWithRepeat();
-		    }
-		}
+    function nextWord(auto=false) {
+        if (!orderedList.length || paused) return;
+        currentIndex += 1;
+        if (currentIndex >= orderedList.length) {
+            currentIndex = orderedList.length-1;
+            pausePlay(true);
+            return;
+        }
+        playCurrentWordWithRepeat(function() {
+            if (autoNextCb.checked && playing && !paused) {
+                timer = setTimeout(function waitIfSpeaking(){
+                    if (speaking || paused) {
+                        setTimeout(waitIfSpeaking, 100);
+                        return;
+                    }
+                    nextWord(true);
+                }, Number(intervalInput.value)*1000);
+            }
+        });
+    }
+    function prevWord() {
+        if (!orderedList.length || paused) return;
+        if (currentIndex > 0) {
+            currentIndex -= 1;
+            currentRepeat = 1;
+            playCurrentWordWithRepeat();
+        } else {
+            currentRepeat = 1;
+            playCurrentWordWithRepeat();
+        }
+    }
     function pausePlay(forceStop = false) {
         if (timer) clearTimeout(timer);
         timer = null;
